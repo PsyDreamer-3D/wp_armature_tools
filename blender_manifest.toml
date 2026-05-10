@@ -1,0 +1,19 @@
+schema_version = "1.0.0"
+
+id = "wp_armature_tools"
+version = "1.6.0"
+name = "Weight Paint Armature Tools"
+tagline = "Armature operators and bone layer controls in Weight Paint mode"
+maintainer = "Jess G."
+type = "add-on"
+
+blender_version_min = "3.0.0"
+
+license = ["SPDX:GPL-2.0-or-later"]
+
+category = "Rigging"
+
+tags = ["Rigging", "Paint", "Armature", "Weight Paint"]
+
+[permissions]
+# No network, file-system, or clipboard access required.
