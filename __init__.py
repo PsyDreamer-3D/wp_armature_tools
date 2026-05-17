@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Weight Paint Armature Tools",
     "author": "Jess G.",
-    "version": (1, 6, 0),
+    "version": (1, 7, 0),
     "blender": (3, 0, 0),
     "location": "Weight Paint > Sidebar > Armature  |  M → Bone Layers popup",
     "description": (
@@ -395,6 +395,31 @@ class WPAT_PT_armature_panel(bpy.types.Panel):
         col = layout.column(align=True)
         col.label(text="Weight Utilities:")
         col.operator("wpat.normalize_all_weights", icon='MOD_VERTEX_WEIGHT')
+
+        layout.separator()
+
+        # ── Viewport display ──────────────────────────────────────────────
+        col = layout.column(align=True)
+        col.label(text="Viewport Display:")
+
+        col.prop(arm, "display_type", text="Display As")
+
+        sub = col.column(align=True)
+        sub.prop(arm, "show_names",              text="Names")
+        sub.prop(arm, "show_bone_custom_shapes", text="Shapes")
+        if _USE_BONE_COLLECTIONS:
+            sub.prop(arm, "show_bone_colors",    text="Bone Colors")
+        sub.prop(arm_obj, "show_in_front",       text="In Front")
+
+        axes_row = col.row(align=True)
+        axes_row.prop(arm, "show_axes", text="Axes")
+        if _USE_BONE_COLLECTIONS:
+            sub_axes = axes_row.row(align=True)
+            sub_axes.active = arm.show_axes
+            sub_axes.prop(arm, "axes_position", text="Position", slider=True)
+
+        if _USE_BONE_COLLECTIONS:
+            col.row(align=True).prop(arm, "relation_line_position", text="Relations", expand=True)
 
 
 # ---------------------------------------------------------------------------
