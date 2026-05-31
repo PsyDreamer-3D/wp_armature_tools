@@ -321,6 +321,160 @@ class WPAT_OT_normalize_all_weights(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class WPAT_OT_split_coaxial_weights(bpy.types.Operator):
+    """Split the source vertex group between two co-axial bones by projecting each vertex onto the combined bone axis"""
+    bl_idname = "wpat.split_coaxial_weights"
+    bl_label = "Split Coaxial Weights"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    source_vg: bpy.props.StringProperty(name="Source VG")
+    primary_bone: bpy.props.StringProperty(name="Primary Bone")
+    secondary_bone: bpy.props.StringProperty(name="Secondary Bone")
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        if not (obj and obj.type == 'MESH' and obj.vertex_groups.active):
+            return False
+        return get_armature_object(context) is not None
+
+    def invoke(self, context, event):
+        obj = context.active_object
+        arm_obj = get_armature_object(context)
+
+        active_vg = obj.vertex_groups.active
+        self.source_vg = active_vg.name if active_vg else ""
+
+        if self.source_vg in arm_obj.data.bones:
+            self.primary_bone = self.source_vg
+        else:
+            self.primary_bone = ""
+
+        candidate = self.primary_bone + ".001"
+        self.secondary_bone = candidate if candidate in arm_obj.data.bones else ""
+
+        return context.window_manager.invoke_props_dialog(self, width=320)
+
+    def draw(self, context):
+        obj = context.active_object
+        arm_obj = get_armature_object(context)
+        layout = self.layout
+        layout.prop_search(self, "source_vg",      obj,          "vertex_groups", text="Source VG")
+        layout.prop_search(self, "primary_bone",   arm_obj.data, "bones",         text="Primary Bone")
+        layout.prop_search(self, "secondary_bone", arm_obj.data, "bones",         text="Secondary Bone")
+
+    # ------------------------------------------------------------------
+
+    def _do_split(self, obj, arm_obj, source_vg_name, primary_bone_name, secondary_bone_name):
+        """Project vertices in source_vg_name onto the combined bone axis and move
+        those past the split point into secondary_bone_name's group.
+
+        Returns the number of vertices moved, or -1 when prerequisites are absent
+        (missing VG or bone — silent skip, used for the mirrored pass).
+        """
+        arm = arm_obj.data
+
+        if source_vg_name not in obj.vertex_groups:
+            return -1
+        if primary_bone_name not in arm.bones:
+            return -1
+        if secondary_bone_name not in arm.bones:
+            return -1
+
+        source_vg = obj.vertex_groups[source_vg_name]
+        primary_bone = arm.bones[primary_bone_name]
+        secondary_bone = arm.bones[secondary_bone_name]
+
+        if secondary_bone_name in obj.vertex_groups:
+            secondary_vg = obj.vertex_groups[secondary_bone_name]
+        else:
+            secondary_vg = obj.vertex_groups.new(name=secondary_bone_name)
+
+        # Build combined bone axis in armature local space.
+        # Vertices projecting past the primary bone's tail belong to the secondary bone.
+        p1 = primary_bone.head_local.copy()
+        p2 = secondary_bone.tail_local.copy()
+        split_pt = primary_bone.tail_local.copy()
+
+        axis = p2 - p1
+        axis_len_sq = axis.dot(axis)
+
+        if axis_len_sq < 1e-10:
+            return -1
+
+        split_t = (split_pt - p1).dot(axis) / axis_len_sq
+        mesh_to_arm = arm_obj.matrix_world.inverted() @ obj.matrix_world
+
+        vg_idx = source_vg.index
+        secondary_indices = []
+        secondary_weights = []
+
+        for vert in obj.data.vertices:
+            w = None
+            for g in vert.groups:
+                if g.group == vg_idx:
+                    w = g.weight
+                    break
+            if w is None or w == 0.0:
+                continue
+
+            v_arm = mesh_to_arm @ vert.co
+            t = (v_arm - p1).dot(axis) / axis_len_sq
+
+            if t > split_t:
+                secondary_indices.append(vert.index)
+                secondary_weights.append(w)
+
+        if secondary_indices:
+            source_vg.remove(secondary_indices)
+            for idx, w in zip(secondary_indices, secondary_weights):
+                secondary_vg.add([idx], w, 'REPLACE')
+
+        return len(secondary_indices)
+
+    # ------------------------------------------------------------------
+
+    def execute(self, context):
+        obj = context.active_object
+        arm_obj = get_armature_object(context)
+        arm = arm_obj.data
+
+        if self.source_vg not in obj.vertex_groups:
+            self.report({'ERROR'}, f"Vertex group '{self.source_vg}' not found")
+            return {'CANCELLED'}
+        if self.primary_bone not in arm.bones:
+            self.report({'ERROR'}, f"Bone '{self.primary_bone}' not found in armature")
+            return {'CANCELLED'}
+        if self.secondary_bone not in arm.bones:
+            self.report({'ERROR'}, f"Bone '{self.secondary_bone}' not found in armature")
+            return {'CANCELLED'}
+        if self.primary_bone == self.secondary_bone:
+            self.report({'ERROR'}, "Primary and secondary bones must be different")
+            return {'CANCELLED'}
+
+        count = self._do_split(obj, arm_obj, self.source_vg, self.primary_bone, self.secondary_bone)
+        if count < 0:
+            self.report({'ERROR'}, "Bones are co-located — cannot determine a split axis")
+            return {'CANCELLED'}
+
+        msg = f"Split '{self.source_vg}': moved {count} vertices to '{self.secondary_bone}'"
+
+        mesh = obj.data
+        mirror_axes_active = obj.use_mesh_mirror_x or obj.use_mesh_mirror_y or obj.use_mesh_mirror_z
+        if mesh.use_mirror_vertex_groups and mirror_axes_active:
+            mir_source    = bpy.utils.flip_name(self.source_vg)
+            mir_primary   = bpy.utils.flip_name(self.primary_bone)
+            mir_secondary = bpy.utils.flip_name(self.secondary_bone)
+
+            if mir_source != self.source_vg:
+                mir_count = self._do_split(obj, arm_obj, mir_source, mir_primary, mir_secondary)
+                if mir_count >= 0:
+                    msg += f"; mirror: moved {mir_count} to '{mir_secondary}'"
+
+        self.report({'INFO'}, msg)
+        return {'FINISHED'}
+
+
 # ---------------------------------------------------------------------------
 # Sidebar panel
 # ---------------------------------------------------------------------------
@@ -395,6 +549,7 @@ class WPAT_PT_armature_panel(bpy.types.Panel):
         col = layout.column(align=True)
         col.label(text="Weight Utilities:")
         col.operator("wpat.normalize_all_weights", icon='MOD_VERTEX_WEIGHT')
+        col.operator("wpat.split_coaxial_weights", icon='BONE_DATA')
 
         layout.separator()
 
@@ -434,6 +589,7 @@ classes = (
     WPAT_OT_clear_bone_transforms,
     WPAT_OT_apply_pose_as_rest,
     WPAT_OT_normalize_all_weights,
+    WPAT_OT_split_coaxial_weights,
     WPAT_PT_armature_panel,
 )
 
