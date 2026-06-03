@@ -476,6 +476,298 @@ class WPAT_OT_split_coaxial_weights(bpy.types.Operator):
 
 
 # ---------------------------------------------------------------------------
+# Fill bone weights from neighbouring region
+# ---------------------------------------------------------------------------
+
+class WPAT_OT_fill_bone_from_region(bpy.types.Operator):
+    """Populate a bone's vertex group by blending weights from neighbouring
+groups, similar to the Vertex Weight Mix modifier.
+
+Blend Mode controls how source weights are combined:
+  Minimum  — weight only where all sources overlap (ideal for inserting a
+             bone between two others; acts as a natural region filter)
+  Average  — mean of all source weights
+  Maximum  — strongest source weight wins
+  Sum      — sum of sources, clamped to 1.0
+
+Limit to Bone Region clips the result to the target bone's physical extent.
+Normalise Overlap scales source + target weights at each affected vertex so
+the combined total is preserved, preventing over-weighted vertices."""
+    bl_idname = "wpat.fill_bone_from_region"
+    bl_label = "Fill Bone from Region"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    target_bone: bpy.props.StringProperty(name="Target Bone")
+    source_vgs: bpy.props.StringProperty(
+        name="Source VGs",
+        description="Comma-separated vertex group names to sample weights from",
+    )
+    blend_mode: bpy.props.EnumProperty(
+        name="Blend Mode",
+        description="How source group weights are combined into the target group",
+        items=[
+            ('MINIMUM', "Minimum",
+             "Use the smallest source weight — fills only the transition zone "
+             "(best for inserting a bone between two others)",
+             'REMOVE', 0),
+            ('AVERAGE', "Average",
+             "Average of all source weights",
+             'SMOOTHCURVE', 1),
+            ('MAXIMUM', "Maximum",
+             "Use the largest source weight — broadest coverage",
+             'ADD', 2),
+            ('SUM',     "Sum",
+             "Sum of all source weights, clamped to 1.0",
+             'PLUS', 3),
+        ],
+        default='MINIMUM',
+    )
+    use_region_clip: bpy.props.BoolProperty(
+        name="Limit to Bone Region",
+        description=(
+            "Only fill vertices within the target bone's physical extent "
+            "(0–1 axis projection).  With Minimum blend this is usually redundant; "
+            "useful with Average or Maximum to prevent bleed-over"
+        ),
+        default=True,
+    )
+    normalize_overlap: bpy.props.BoolProperty(
+        name="Normalise Overlap",
+        description=(
+            "Scale source and target weights on each affected vertex so their "
+            "combined total is preserved — prevents over-weighted vertices that "
+            "corrupt blur and other Weight Paint brush behaviour"
+        ),
+        default=True,
+    )
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        if not (obj and obj.type == 'MESH' and obj.vertex_groups.active):
+            return False
+        return get_armature_object(context) is not None
+
+    def invoke(self, context, event):
+        obj     = context.active_object
+        arm_obj = get_armature_object(context)
+        arm     = arm_obj.data
+
+        active_vg       = obj.vertex_groups.active
+        vg_name         = active_vg.name if active_vg else ""
+        self.target_bone = vg_name if vg_name in arm.bones else ""
+
+        # Auto-detect source VGs from parent and children of the target bone.
+        sources = []
+        if self.target_bone:
+            bone = arm.bones[self.target_bone]
+            if bone.parent and bone.parent.name in obj.vertex_groups:
+                sources.append(bone.parent.name)
+            for child in bone.children:
+                if child.name in obj.vertex_groups:
+                    sources.append(child.name)
+
+        self.source_vgs = ", ".join(sources)
+        return context.window_manager.invoke_props_dialog(self, width=380)
+
+    def draw(self, context):
+        obj     = context.active_object
+        arm_obj = get_armature_object(context)
+        layout  = self.layout
+
+        layout.prop_search(self, "target_bone", arm_obj.data, "bones", text="Target Bone")
+        layout.prop(self, "source_vgs", text="Source VGs")
+        layout.label(text="Comma-separated VGs to sample from", icon='INFO')
+
+        # Per-entry validity indicators.
+        names = [n.strip() for n in self.source_vgs.split(",") if n.strip()]
+        if names:
+            layout.separator(factor=0.5)
+            col = layout.column(align=True)
+            for name in names:
+                row = col.row()
+                if name in obj.vertex_groups:
+                    row.label(text=name, icon='GROUP_VERTEX')
+                else:
+                    row.label(text=f"{name}  (not found)", icon='ERROR')
+
+        layout.separator(factor=0.5)
+        layout.prop(self, "blend_mode")
+        layout.prop(self, "use_region_clip")
+        layout.prop(self, "normalize_overlap")
+
+    # ------------------------------------------------------------------
+
+    def _do_fill(self, obj, arm_obj, target_bone_name, source_vg_names,
+                 blend_mode, use_region_clip, normalize_overlap):
+        """Blend source VG weights and write the result into the target VG.
+
+        blend_mode controls how source weights are combined:
+          'MINIMUM' — min of all sources (fills only the overlap/transition zone)
+          'AVERAGE' — mean of all sources
+          'MAXIMUM' — max of all sources
+          'SUM'     — clamped sum (matches original behaviour)
+
+        use_region_clip: if True, only vertices whose projection onto the
+        target bone's axis falls in [0, 1] are processed.
+
+        normalize_overlap: if True, source + target weights are scaled after
+        each write so their combined total equals the pre-fill source total —
+        no weight is created or destroyed, just redistributed.  This prevents
+        over-weighted vertices from corrupting Weight Paint brush behaviour.
+
+        Returns the number of vertices filled, or -1 on missing prerequisites.
+        """
+        arm = arm_obj.data
+
+        if target_bone_name not in arm.bones:
+            return -1
+
+        source_vgs = []
+        for name in source_vg_names:
+            if name not in obj.vertex_groups:
+                return -1
+            source_vgs.append(obj.vertex_groups[name])
+
+        if not source_vgs:
+            return -1
+
+        bone = arm.bones[target_bone_name]
+
+        if target_bone_name in obj.vertex_groups:
+            target_vg = obj.vertex_groups[target_bone_name]
+        else:
+            target_vg = obj.vertex_groups.new(name=target_bone_name)
+
+        # Bone axis in armature local space (needed for region clip).
+        p_head      = bone.head_local.copy()
+        bone_vec    = bone.tail_local - bone.head_local
+        bone_len_sq = bone_vec.dot(bone_vec)
+
+        if bone_len_sq < 1e-10:
+            return -1
+
+        mesh_to_arm = arm_obj.matrix_world.inverted() @ obj.matrix_world
+        n_sources   = len(source_vgs)
+
+        # Build index → VG lookup for the normalise pass.
+        involved_vgs = {vg.index: vg for vg in source_vgs}
+        involved_vgs[target_vg.index] = target_vg
+
+        filled = 0
+        for vert in obj.data.vertices:
+            # Build per-vertex weight map once; reused by blend and normalise.
+            vert_weights = {g.group: g.weight for g in vert.groups}
+
+            # Source total (used as the normalise target and the early-out guard).
+            src_total = sum(vert_weights.get(vg.index, 0.0) for vg in source_vgs)
+            if src_total == 0.0:
+                continue
+
+            # Optional spatial clip: only fill within the bone's own extent.
+            if use_region_clip:
+                t = (mesh_to_arm @ vert.co - p_head).dot(bone_vec) / bone_len_sq
+                if not (0.0 <= t <= 1.0):
+                    continue
+
+            # --- Blend ---------------------------------------------------
+            weights = [vert_weights.get(vg.index, 0.0) for vg in source_vgs]
+
+            if blend_mode == 'MINIMUM':
+                new_target_w = min(weights)
+            elif blend_mode == 'AVERAGE':
+                new_target_w = sum(weights) / n_sources
+            elif blend_mode == 'MAXIMUM':
+                new_target_w = max(weights)
+            else:  # 'SUM'
+                new_target_w = min(sum(weights), 1.0)
+
+            if new_target_w < 1e-6:
+                continue
+
+            target_vg.add([vert.index], new_target_w, 'REPLACE')
+            filled += 1
+
+            if not normalize_overlap:
+                continue
+
+            # --- Normalise pass ------------------------------------------
+            # Scale every involved group (sources + target) so their combined
+            # total equals src_total (the weight that existed before the fill).
+            #
+            #   involved_after = src_total + new_target_w
+            #   scale          = src_total / involved_after   (always ≤ 1)
+            #
+            # This preserves the relative ratios among all involved groups
+            # and guarantees no over-weighting.
+            involved_after = src_total + new_target_w
+            if involved_after < 1e-9:
+                continue
+            scale = src_total / involved_after
+
+            # Re-read vert.groups so the newly written target weight is visible.
+            vert_weights_after = {g.group: g.weight for g in vert.groups}
+            for idx, vg in involved_vgs.items():
+                old_w = vert_weights_after.get(idx, 0.0)
+                if old_w == 0.0:
+                    continue
+                new_w = old_w * scale
+                if new_w < 1e-6:
+                    vg.remove([vert.index])
+                else:
+                    vg.add([vert.index], new_w, 'REPLACE')
+
+        return filled
+
+    # ------------------------------------------------------------------
+
+    def execute(self, context):
+        obj     = context.active_object
+        arm_obj = get_armature_object(context)
+        arm     = arm_obj.data
+
+        if self.target_bone not in arm.bones:
+            self.report({'ERROR'}, f"Bone '{self.target_bone}' not found in armature")
+            return {'CANCELLED'}
+
+        source_names = [n.strip() for n in self.source_vgs.split(",") if n.strip()]
+        if not source_names:
+            self.report({'ERROR'}, "No source vertex groups specified")
+            return {'CANCELLED'}
+
+        missing = [n for n in source_names if n not in obj.vertex_groups]
+        if missing:
+            self.report({'ERROR'}, f"Vertex group(s) not found: {', '.join(missing)}")
+            return {'CANCELLED'}
+
+        count = self._do_fill(
+            obj, arm_obj, self.target_bone, source_names,
+            self.blend_mode, self.use_region_clip, self.normalize_overlap,
+        )
+        if count < 0:
+            self.report({'ERROR'}, "Target bone is zero-length or source groups have no weights")
+            return {'CANCELLED'}
+
+        msg = f"Filled '{self.target_bone}' from region: {count} vertices"
+
+        mesh = obj.data
+        mirror_axes_active = obj.use_mesh_mirror_x or obj.use_mesh_mirror_y or obj.use_mesh_mirror_z
+        if mesh.use_mirror_vertex_groups and mirror_axes_active:
+            mir_target = bpy.utils.flip_name(self.target_bone)
+            if mir_target != self.target_bone:
+                mir_sources = [bpy.utils.flip_name(n) for n in source_names]
+                mir_count   = self._do_fill(
+                    obj, arm_obj, mir_target, mir_sources,
+                    self.blend_mode, self.use_region_clip, self.normalize_overlap,
+                )
+                if mir_count >= 0:
+                    msg += f"; mirror '{mir_target}': {mir_count} vertices"
+
+        self.report({'INFO'}, msg)
+        return {'FINISHED'}
+
+
+# ---------------------------------------------------------------------------
 # Sidebar panel
 # ---------------------------------------------------------------------------
 
@@ -548,8 +840,9 @@ class WPAT_PT_armature_panel(bpy.types.Panel):
         # ── Weight utilities ──────────────────────────────────────────────
         col = layout.column(align=True)
         col.label(text="Weight Utilities:")
-        col.operator("wpat.normalize_all_weights", icon='MOD_VERTEX_WEIGHT')
-        col.operator("wpat.split_coaxial_weights", icon='BONE_DATA')
+        col.operator("wpat.normalize_all_weights",  icon='MOD_VERTEX_WEIGHT')
+        col.operator("wpat.split_coaxial_weights",  icon='BONE_DATA')
+        col.operator("wpat.fill_bone_from_region",  icon='EYEDROPPER')
 
         layout.separator()
 
@@ -590,6 +883,7 @@ classes = (
     WPAT_OT_apply_pose_as_rest,
     WPAT_OT_normalize_all_weights,
     WPAT_OT_split_coaxial_weights,
+    WPAT_OT_fill_bone_from_region,
     WPAT_PT_armature_panel,
 )
 

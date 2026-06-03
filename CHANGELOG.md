@@ -6,6 +6,10 @@ All notable changes to Weight Paint Armature Tools are documented here.
 
 ### Added
 - **Split Coaxial Weights** operator (Weight Utilities section): splits a single vertex group between two co-axial bones by projecting each vertex onto the combined bone axis. Respects the active Weight Paint mirror settings — when Mirror Vertex Groups is enabled, the mirrored bone pair is split automatically.
+- **Fill Bone from Region** operator (Weight Utilities section): populates a bone's vertex group by blending weights from neighbouring groups, analogous to the Vertex Weight Mix modifier. Auto-detects source VGs from the target bone's parent and children. Respects Mirror Vertex Groups.
+  - **Blend Mode** (Minimum / Average / Maximum / Sum): controls how source weights are combined. Default is *Minimum* — the target receives weight only where all sources overlap, naturally scoping the fill to the transition zone without requiring a strict spatial filter. Ideal for inserting a bone between two existing weighted bones.
+  - **Limit to Bone Region** (default on): additionally clips filled vertices to the target bone's physical extent via axis projection.
+  - **Normalise Overlap** (default on): after writing each target weight, scales all involved groups (sources + target) so their combined total equals the pre-fill source total. No weight is created or destroyed; it is redistributed. Prevents over-weighted vertices that corrupt blur and other Weight Paint brush behaviour.
 - Release workflow and build scripts for automated packaging.
 
 ### Changed
