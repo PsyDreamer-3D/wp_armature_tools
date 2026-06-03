@@ -305,9 +305,13 @@ class WPAT_OT_clear_bone_transforms(bpy.types.Operator):
 
 
 class WPAT_OT_normalize_all_weights(bpy.types.Operator):
-    """Normalize all vertex groups on the active mesh so they sum to 1"""
+    """Normalize vertex groups so all weights on each vertex sum to 1.
+
+Selected bones only: scales non-active selected VGs to fill the weight
+budget left by the active bone and all unselected bones (active bone weight
+is preserved).  Falls back to normalizing all VGs when no bones are selected"""
     bl_idname = "wpat.normalize_all_weights"
-    bl_label = "Normalize All Weights"
+    bl_label = "Normalize Selected Weights"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -316,8 +320,79 @@ class WPAT_OT_normalize_all_weights(bpy.types.Operator):
         return obj and obj.type == 'MESH' and len(obj.vertex_groups) > 0
 
     def execute(self, context):
-        bpy.ops.object.vertex_group_normalize_all(lock_active=False)
-        self.report({'INFO'}, "All vertex groups normalized.")
+        obj = context.active_object
+
+        # ── Bone-selection-aware path ─────────────────────────────────────
+        selected_pbones = context.selected_pose_bones or []
+        active_pbone    = context.active_pose_bone
+
+        if not selected_pbones:
+            # No bones selected — fall back to normalising everything.
+            bpy.ops.object.vertex_group_normalize_all(lock_active=False)
+            self.report({'INFO'}, "No bones selected — normalized all vertex groups.")
+            return {'FINISHED'}
+
+        # Only consider bones that actually have a VG on this mesh.
+        selected_vg_names = {pb.name for pb in selected_pbones if pb.name in obj.vertex_groups}
+        if not selected_vg_names:
+            self.report({'WARNING'}, "No selected bone has a matching vertex group on this mesh.")
+            return {'CANCELLED'}
+
+        active_vg_name = (
+            active_pbone.name
+            if active_pbone and active_pbone.name in obj.vertex_groups
+            else None
+        )
+
+        non_active_vg_names = selected_vg_names - ({active_vg_name} if active_vg_name else set())
+        if not non_active_vg_names:
+            self.report({'INFO'}, "Only the active bone is selected — nothing to normalize.")
+            return {'FINISHED'}
+
+        # Pre-compute index sets for fast per-vertex lookup.
+        selected_vg_indices = {obj.vertex_groups[n].index for n in selected_vg_names}
+        active_vg_idx       = obj.vertex_groups[active_vg_name].index if active_vg_name else None
+        non_active_vgs      = [obj.vertex_groups[n] for n in non_active_vg_names]
+
+        modified = 0
+        for vert in obj.data.vertices:
+            vert_weights = {g.group: g.weight for g in vert.groups}
+
+            # Weight locked in place (active bone) and weight outside our scope
+            # (unselected bones) together define how much space remains.
+            active_w     = vert_weights.get(active_vg_idx, 0.0) if active_vg_idx is not None else 0.0
+            unselected_w = sum(w for idx, w in vert_weights.items()
+                               if idx not in selected_vg_indices)
+            budget = max(0.0, 1.0 - active_w - unselected_w)
+
+            target_total = sum(vert_weights.get(vg.index, 0.0) for vg in non_active_vgs)
+            if target_total == 0.0:
+                continue                    # vertex has no weight in these VGs
+
+            scale = budget / target_total
+            if abs(scale - 1.0) < 1e-6:
+                continue                    # already correct, nothing to write
+
+            for vg in non_active_vgs:
+                old_w = vert_weights.get(vg.index, 0.0)
+                if old_w == 0.0:
+                    continue
+                new_w = old_w * scale
+                if new_w < 1e-6:
+                    # Budget is exhausted — cleanly remove rather than leaving
+                    # a stale zero-weight entry inside the group.
+                    vg.remove([vert.index])
+                else:
+                    vg.add([vert.index], new_w, 'REPLACE')
+
+            modified += 1
+
+        locked_note = f", locked: {active_vg_name}" if active_vg_name else ""
+        self.report(
+            {'INFO'},
+            f"Normalized {len(non_active_vg_names)} VG(s) across {modified} vertices"
+            f" ({len(selected_vg_names)} selected{locked_note}).",
+        )
         return {'FINISHED'}
 
 

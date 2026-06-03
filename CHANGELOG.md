@@ -40,6 +40,6 @@ All notable changes to Weight Paint Armature Tools are documented here.
   - Clear Bone Transforms
   - Apply Pose as Rest Pose
 - **Weight Utilities**:
-  - Normalize All Weights
+  - Normalize Selected Weights
 - Configurable keymap shortcut with preview in Add-on Preferences.
 - CloudRig detection via PropertyGroup presence and custom property fallback.
