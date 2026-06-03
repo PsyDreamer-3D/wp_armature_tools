@@ -5,7 +5,7 @@ All notable changes to Weight Paint Armature Tools are documented here.
 ## [Unreleased]
 
 ### Added
-- **Split Coaxial Weights** operator (Weight Utilities section): splits a single vertex group between two co-axial bones by projecting each vertex onto the combined bone axis. Respects the active Weight Paint mirror settings — when Mirror Vertex Groups is enabled, the mirrored bone pair is split automatically.
+- **Split Coaxial Weights** operator (Weight Utilities section): splits a single vertex group across N co-axial bones by projecting each vertex onto the combined bone axis. The bone chain is auto-detected from the active vertex group name (`.001`, `.002`, … suffix convention) and displayed per-bone in the dialog with validity indicators. Bones can be entered manually as a comma-separated list to support non-standard naming. Respects the active Weight Paint mirror settings — when Mirror Vertex Groups is enabled, the full mirrored chain is split automatically.
 - Release workflow and build scripts for automated packaging.
 
 ### Changed

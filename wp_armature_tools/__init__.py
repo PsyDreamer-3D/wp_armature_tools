@@ -320,16 +320,18 @@ class WPAT_OT_normalize_all_weights(bpy.types.Operator):
         self.report({'INFO'}, "All vertex groups normalized.")
         return {'FINISHED'}
 
-
 class WPAT_OT_split_coaxial_weights(bpy.types.Operator):
-    """Split the source vertex group between two co-axial bones by projecting each vertex onto the combined bone axis"""
+    """Split a vertex group across N co-axial bones by projecting each vertex onto the combined bone axis.
+Auto-detects the bone chain from the active vertex group name (.001, .002, … suffixes)"""
     bl_idname = "wpat.split_coaxial_weights"
     bl_label = "Split Coaxial Weights"
     bl_options = {'REGISTER', 'UNDO'}
 
     source_vg: bpy.props.StringProperty(name="Source VG")
-    primary_bone: bpy.props.StringProperty(name="Primary Bone")
-    secondary_bone: bpy.props.StringProperty(name="Secondary Bone")
+    bone_chain: bpy.props.StringProperty(
+        name="Bone Chain",
+        description="Comma-separated bone names in axis order (auto-detected from Source VG name)",
+    )
 
     @classmethod
     def poll(cls, context):
@@ -339,75 +341,127 @@ class WPAT_OT_split_coaxial_weights(bpy.types.Operator):
         return get_armature_object(context) is not None
 
     def invoke(self, context, event):
-        obj = context.active_object
+        obj     = context.active_object
         arm_obj = get_armature_object(context)
+        arm     = arm_obj.data
 
-        active_vg = obj.vertex_groups.active
+        active_vg      = obj.vertex_groups.active
         self.source_vg = active_vg.name if active_vg else ""
 
-        if self.source_vg in arm_obj.data.bones:
-            self.primary_bone = self.source_vg
-        else:
-            self.primary_bone = ""
+        # Walk the .001 / .002 / … chain starting from the source VG name.
+        chain = []
+        if self.source_vg in arm.bones:
+            chain.append(self.source_vg)
+            i = 1
+            while True:
+                candidate = f"{self.source_vg}.{i:03d}"
+                if candidate in arm.bones:
+                    chain.append(candidate)
+                    i += 1
+                else:
+                    break
 
-        candidate = self.primary_bone + ".001"
-        self.secondary_bone = candidate if candidate in arm_obj.data.bones else ""
-
-        return context.window_manager.invoke_props_dialog(self, width=320)
+        self.bone_chain = ", ".join(chain)
+        return context.window_manager.invoke_props_dialog(self, width=380)
 
     def draw(self, context):
-        obj = context.active_object
+        obj     = context.active_object
         arm_obj = get_armature_object(context)
-        layout = self.layout
-        layout.prop_search(self, "source_vg",      obj,          "vertex_groups", text="Source VG")
-        layout.prop_search(self, "primary_bone",   arm_obj.data, "bones",         text="Primary Bone")
-        layout.prop_search(self, "secondary_bone", arm_obj.data, "bones",         text="Secondary Bone")
+        layout  = self.layout
+
+        layout.prop_search(self, "source_vg", obj, "vertex_groups", text="Source VG")
+        layout.prop(self, "bone_chain", text="Bone Chain")
+        layout.label(text="Comma-separated, in axis order", icon='INFO')
+
+        # Parse the current field and show per-bone validity at a glance.
+        arm   = arm_obj.data
+        names = [n.strip() for n in self.bone_chain.split(",") if n.strip()]
+        if names:
+            layout.separator(factor=0.5)
+            col = layout.column(align=True)
+            for name in names:
+                row = col.row()
+                if name in arm.bones:
+                    row.label(text=name, icon='BONE_DATA')
+                else:
+                    row.label(text=f"{name}  (not found)", icon='ERROR')
 
     # ------------------------------------------------------------------
 
-    def _do_split(self, obj, arm_obj, source_vg_name, primary_bone_name, secondary_bone_name):
-        """Project vertices in source_vg_name onto the combined bone axis and move
-        those past the split point into secondary_bone_name's group.
+    @staticmethod
+    def _parse_chain(bone_chain_str):
+        """Return the list of stripped, non-empty bone name strings."""
+        return [n.strip() for n in bone_chain_str.split(",") if n.strip()]
 
-        Returns the number of vertices moved, or -1 when prerequisites are absent
-        (missing VG or bone — silent skip, used for the mirrored pass).
+    def _do_split_chain(self, obj, arm_obj, source_vg_name, bone_names):
+        """Distribute source_vg_name's weights across N bones along their shared axis.
+
+        Bones are sorted by their head position along the axis so the caller
+        does not need to supply them in a particular order.  For each vertex
+        in the source group the function finds the bone segment whose
+        [head … tail] interval (projected onto the axis) contains the vertex
+        and assigns the weight to that bone's vertex group.  The source group
+        is cleared of any vertex that was redistributed.
+
+        Returns a dict  {bone_name: vertex_count}  on success, or None when
+        prerequisites are missing (silent — used for the mirrored pass).
         """
         arm = arm_obj.data
 
         if source_vg_name not in obj.vertex_groups:
-            return -1
-        if primary_bone_name not in arm.bones:
-            return -1
-        if secondary_bone_name not in arm.bones:
-            return -1
+            return None
 
-        source_vg = obj.vertex_groups[source_vg_name]
-        primary_bone = arm.bones[primary_bone_name]
-        secondary_bone = arm.bones[secondary_bone_name]
+        bones = []
+        for name in bone_names:
+            if name not in arm.bones:
+                return None
+            bones.append(arm.bones[name])
 
-        if secondary_bone_name in obj.vertex_groups:
-            secondary_vg = obj.vertex_groups[secondary_bone_name]
-        else:
-            secondary_vg = obj.vertex_groups.new(name=secondary_bone_name)
+        if len(bones) < 2:
+            return None
 
-        # Build combined bone axis in armature local space.
-        # Vertices projecting past the primary bone's tail belong to the secondary bone.
-        p1 = primary_bone.head_local.copy()
-        p2 = secondary_bone.tail_local.copy()
-        split_pt = primary_bone.tail_local.copy()
-
-        axis = p2 - p1
+        # Combined axis: first-bone head → last-bone tail (in armature local space).
+        # Bones are sorted by the projection of their head onto this direction so
+        # the algorithm is independent of the order they were entered.
+        p_start = bones[0].head_local.copy()
+        p_end   = bones[-1].tail_local.copy()
+        axis    = p_end - p_start
         axis_len_sq = axis.dot(axis)
 
         if axis_len_sq < 1e-10:
-            return -1
+            return None
 
-        split_t = (split_pt - p1).dot(axis) / axis_len_sq
+        def _head_t(bone):
+            return (bone.head_local - p_start).dot(axis) / axis_len_sq
+
+        bones_sorted = sorted(bones, key=_head_t)
+
+        # Recompute axis endpoints from the sorted list (sorting may swap them).
+        p_start = bones_sorted[0].head_local.copy()
+        p_end   = bones_sorted[-1].tail_local.copy()
+        axis    = p_end - p_start
+        axis_len_sq = axis.dot(axis)
+
+        # Split thresholds: t value at each bone's tail except the last.
+        split_ts = [
+            (bone.tail_local - p_start).dot(axis) / axis_len_sq
+            for bone in bones_sorted[:-1]
+        ]
+
+        # Ensure destination VGs exist for every bone in the chain.
+        dest_vgs = []
+        for bone in bones_sorted:
+            if bone.name in obj.vertex_groups:
+                dest_vgs.append(obj.vertex_groups[bone.name])
+            else:
+                dest_vgs.append(obj.vertex_groups.new(name=bone.name))
+
+        source_vg = obj.vertex_groups[source_vg_name]
         mesh_to_arm = arm_obj.matrix_world.inverted() @ obj.matrix_world
-
         vg_idx = source_vg.index
-        secondary_indices = []
-        secondary_weights = []
+
+        # Classify every vertex that belongs to the source group.
+        assignments = [[] for _ in bones_sorted]   # assignments[i] = [(vert_idx, weight), …]
 
         for vert in obj.data.vertices:
             w = None
@@ -419,57 +473,75 @@ class WPAT_OT_split_coaxial_weights(bpy.types.Operator):
                 continue
 
             v_arm = mesh_to_arm @ vert.co
-            t = (v_arm - p1).dot(axis) / axis_len_sq
+            t     = (v_arm - p_start).dot(axis) / axis_len_sq
 
-            if t > split_t:
-                secondary_indices.append(vert.index)
-                secondary_weights.append(w)
+            # Walk the split thresholds to find the owning bone segment.
+            seg = len(bones_sorted) - 1          # default: last bone
+            for i, threshold in enumerate(split_ts):
+                if t <= threshold:
+                    seg = i
+                    break
 
-        if secondary_indices:
-            source_vg.remove(secondary_indices)
-            for idx, w in zip(secondary_indices, secondary_weights):
-                secondary_vg.add([idx], w, 'REPLACE')
+            assignments[seg].append((vert.index, w))
 
-        return len(secondary_indices)
+        # Flush all classified vertices from the source group first, then
+        # write them into the correct destination groups.
+        all_indices = [idx for seg in assignments for (idx, _) in seg]
+        if all_indices:
+            source_vg.remove(all_indices)
+
+        counts = {}
+        for bone, vg, seg in zip(bones_sorted, dest_vgs, assignments):
+            for idx, w in seg:
+                vg.add([idx], w, 'REPLACE')
+            counts[bone.name] = len(seg)
+
+        return counts
 
     # ------------------------------------------------------------------
 
     def execute(self, context):
-        obj = context.active_object
+        obj     = context.active_object
         arm_obj = get_armature_object(context)
-        arm = arm_obj.data
+        arm     = arm_obj.data
 
         if self.source_vg not in obj.vertex_groups:
             self.report({'ERROR'}, f"Vertex group '{self.source_vg}' not found")
             return {'CANCELLED'}
-        if self.primary_bone not in arm.bones:
-            self.report({'ERROR'}, f"Bone '{self.primary_bone}' not found in armature")
-            return {'CANCELLED'}
-        if self.secondary_bone not in arm.bones:
-            self.report({'ERROR'}, f"Bone '{self.secondary_bone}' not found in armature")
-            return {'CANCELLED'}
-        if self.primary_bone == self.secondary_bone:
-            self.report({'ERROR'}, "Primary and secondary bones must be different")
+
+        bone_names = self._parse_chain(self.bone_chain)
+
+        if len(bone_names) < 2:
+            self.report({'ERROR'}, "At least two bones are required in the chain")
             return {'CANCELLED'}
 
-        count = self._do_split(obj, arm_obj, self.source_vg, self.primary_bone, self.secondary_bone)
-        if count < 0:
+        missing = [n for n in bone_names if n not in arm.bones]
+        if missing:
+            self.report({'ERROR'}, f"Bone(s) not found in armature: {', '.join(missing)}")
+            return {'CANCELLED'}
+
+        if len(bone_names) != len(set(bone_names)):
+            self.report({'ERROR'}, "Bone chain contains duplicate names")
+            return {'CANCELLED'}
+
+        counts = self._do_split_chain(obj, arm_obj, self.source_vg, bone_names)
+        if counts is None:
             self.report({'ERROR'}, "Bones are co-located — cannot determine a split axis")
             return {'CANCELLED'}
 
-        msg = f"Split '{self.source_vg}': moved {count} vertices to '{self.secondary_bone}'"
+        summary = ", ".join(f"{n}: {c}v" for n, c in counts.items())
+        msg = f"Split '{self.source_vg}' → {summary}"
 
         mesh = obj.data
         mirror_axes_active = obj.use_mesh_mirror_x or obj.use_mesh_mirror_y or obj.use_mesh_mirror_z
         if mesh.use_mirror_vertex_groups and mirror_axes_active:
-            mir_source    = bpy.utils.flip_name(self.source_vg)
-            mir_primary   = bpy.utils.flip_name(self.primary_bone)
-            mir_secondary = bpy.utils.flip_name(self.secondary_bone)
-
+            mir_source = bpy.utils.flip_name(self.source_vg)
             if mir_source != self.source_vg:
-                mir_count = self._do_split(obj, arm_obj, mir_source, mir_primary, mir_secondary)
-                if mir_count >= 0:
-                    msg += f"; mirror: moved {mir_count} to '{mir_secondary}'"
+                mir_bones  = [bpy.utils.flip_name(n) for n in bone_names]
+                mir_counts = self._do_split_chain(obj, arm_obj, mir_source, mir_bones)
+                if mir_counts is not None:
+                    mir_summary = ", ".join(f"{n}: {c}v" for n, c in mir_counts.items())
+                    msg += f" | mirror → {mir_summary}"
 
         self.report({'INFO'}, msg)
         return {'FINISHED'}
@@ -548,8 +620,8 @@ class WPAT_PT_armature_panel(bpy.types.Panel):
         # ── Weight utilities ──────────────────────────────────────────────
         col = layout.column(align=True)
         col.label(text="Weight Utilities:")
-        col.operator("wpat.normalize_all_weights", icon='MOD_VERTEX_WEIGHT')
-        col.operator("wpat.split_coaxial_weights", icon='BONE_DATA')
+        col.operator("wpat.normalize_all_weights",  icon='MOD_VERTEX_WEIGHT')
+        col.operator("wpat.split_coaxial_weights",  icon='BONE_DATA')
 
         layout.separator()
 
