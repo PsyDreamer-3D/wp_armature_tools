@@ -331,6 +331,23 @@ class WPAT_OT_split_coaxial_weights(bpy.types.Operator):
     primary_bone: bpy.props.StringProperty(name="Primary Bone")
     secondary_bone: bpy.props.StringProperty(name="Secondary Bone")
 
+    blend_width: bpy.props.FloatProperty(
+        name="Blend Width",
+        description=(
+            "Width of the soft transition zone at the split point, as a fraction of the "
+            "combined bone axis length. 0 = hard cut."
+        ),
+        min=0.0, max=0.5, default=0.05, subtype='FACTOR',
+    )
+    smooth_iterations: bpy.props.IntProperty(
+        name="Smooth Iterations",
+        description=(
+            "Edge-topology-aware smoothing passes applied to the split boundary. "
+            "0 = off. Uses the same uniform Laplacian as Blender's Weight Paint smooth."
+        ),
+        min=0, max=10, default=0,
+    )
+
     @classmethod
     def poll(cls, context):
         obj = context.active_object
@@ -362,15 +379,22 @@ class WPAT_OT_split_coaxial_weights(bpy.types.Operator):
         layout.prop_search(self, "source_vg",      obj,          "vertex_groups", text="Source VG")
         layout.prop_search(self, "primary_bone",   arm_obj.data, "bones",         text="Primary Bone")
         layout.prop_search(self, "secondary_bone", arm_obj.data, "bones",         text="Secondary Bone")
+        layout.prop(self, "blend_width")
+        layout.prop(self, "smooth_iterations")
 
     # ------------------------------------------------------------------
 
-    def _do_split(self, obj, arm_obj, source_vg_name, primary_bone_name, secondary_bone_name):
+    def _do_split(self, obj, arm_obj, source_vg_name, primary_bone_name,
+                  secondary_bone_name, blend_width):
         """Project vertices in source_vg_name onto the combined bone axis and move
         those past the split point into secondary_bone_name's group.
 
-        Returns the number of vertices moved, or -1 when prerequisites are absent
-        (missing VG or bone — silent skip, used for the mirrored pass).
+        blend_width controls the half-width of a smoothstep transition zone at the
+        split threshold (as a fraction of the total axis length). 0 = hard cut.
+
+        Returns the number of vertices assigned to the secondary group, or -1 when
+        prerequisites are absent (missing VG or bone — silent skip, used for the
+        mirrored pass).
         """
         arm = arm_obj.data
 
@@ -406,8 +430,10 @@ class WPAT_OT_split_coaxial_weights(bpy.types.Operator):
         mesh_to_arm = arm_obj.matrix_world.inverted() @ obj.matrix_world
 
         vg_idx = source_vg.index
+        half_w = blend_width / 2.0
         secondary_indices = []
         secondary_weights = []
+        primary_updates   = []  # (index, reduced_weight) for blend-zone primaries
 
         for vert in obj.data.vertices:
             w = None
@@ -420,17 +446,118 @@ class WPAT_OT_split_coaxial_weights(bpy.types.Operator):
 
             v_arm = mesh_to_arm @ vert.co
             t = (v_arm - p1).dot(axis) / axis_len_sq
+            delta = t - split_t
 
-            if t > split_t:
+            if delta >= half_w:
+                # Fully in secondary territory
                 secondary_indices.append(vert.index)
                 secondary_weights.append(w)
+            elif half_w > 0.0 and delta > -half_w:
+                # Blend zone — split weight smoothly between both groups via smoothstep
+                zone_t = (delta + half_w) / (2.0 * half_w)
+                blend  = zone_t * zone_t * (3.0 - 2.0 * zone_t)
+                primary_updates.append((vert.index, w * (1.0 - blend)))
+                secondary_indices.append(vert.index)
+                secondary_weights.append(w * blend)
+            # else: fully primary — source_vg keeps the vertex unchanged
 
+        # Write secondary weights (remove from source, add to new group)
         if secondary_indices:
             source_vg.remove(secondary_indices)
             for idx, w in zip(secondary_indices, secondary_weights):
                 secondary_vg.add([idx], w, 'REPLACE')
 
+        # Write reduced primary weights for blend-zone vertices
+        for idx, w in primary_updates:
+            if w < 1e-6:
+                source_vg.remove([idx])
+            else:
+                source_vg.add([idx], w, 'REPLACE')
+
         return len(secondary_indices)
+
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _smooth_boundaries(obj, vg_a, vg_b, iterations, factor=0.5):
+        """Uniform graph Laplacian smooth over the boundary vertices of vg_a and vg_b.
+
+        Only vertices that have non-zero weight in BOTH groups are smoothed (the blend
+        zone at the split boundary). Each iteration blends each boundary vertex toward
+        its edge-neighbour average, then renormalises a+b to preserve the combined
+        total weight — no weight is created or destroyed.
+
+        Uses the same algorithm as Blender's vertex_group_smooth operator
+        (vgroup_smooth_subset in object_vgroup.cc): uniform graph Laplacian with
+        adjacency built from mesh.edges.
+        """
+        if iterations < 1:
+            return
+
+        mesh = obj.data
+        idx_a = vg_a.index
+        idx_b = vg_b.index
+
+        # Build edge adjacency map  {vert_index: [neighbour_indices, ...]}
+        adj = {}
+        for edge in mesh.edges:
+            v0, v1 = edge.vertices[0], edge.vertices[1]
+            adj.setdefault(v0, []).append(v1)
+            adj.setdefault(v1, []).append(v0)
+
+        ifac = 1.0 - factor
+
+        for _ in range(iterations):
+            # Snapshot current weights for both groups
+            wa = {}
+            wb = {}
+            for vert in mesh.vertices:
+                for g in vert.groups:
+                    if g.group == idx_a:
+                        wa[vert.index] = g.weight
+                    elif g.group == idx_b:
+                        wb[vert.index] = g.weight
+
+            # Only smooth vertices present in BOTH groups (the boundary zone)
+            boundary = set(wa) & set(wb)
+            if not boundary:
+                break
+
+            new_wa = dict(wa)
+            new_wb = dict(wb)
+
+            for vi in boundary:
+                neighbours = adj.get(vi, [])
+                if not neighbours:
+                    continue
+                n = len(neighbours)
+                avg_a = sum(wa.get(nb, 0.0) for nb in neighbours) / n
+                avg_b = sum(wb.get(nb, 0.0) for nb in neighbours) / n
+
+                new_wa[vi] = ifac * wa[vi] + factor * avg_a
+                new_wb[vi] = ifac * wb[vi] + factor * avg_b
+
+                # Renormalise to preserve combined total (a + b = constant)
+                total_before = wa[vi]     + wb[vi]
+                total_after  = new_wa[vi] + new_wb[vi]
+                if total_after > 1e-6:
+                    scale = total_before / total_after
+                    new_wa[vi] *= scale
+                    new_wb[vi] *= scale
+
+            # Write back, pruning near-zero entries
+            for vi in boundary:
+                w = new_wa[vi]
+                if w < 1e-6:
+                    vg_a.remove([vi])
+                else:
+                    vg_a.add([vi], w, 'REPLACE')
+
+                w = new_wb[vi]
+                if w < 1e-6:
+                    vg_b.remove([vi])
+                else:
+                    vg_b.add([vi], w, 'REPLACE')
 
     # ------------------------------------------------------------------
 
@@ -452,7 +579,8 @@ class WPAT_OT_split_coaxial_weights(bpy.types.Operator):
             self.report({'ERROR'}, "Primary and secondary bones must be different")
             return {'CANCELLED'}
 
-        count = self._do_split(obj, arm_obj, self.source_vg, self.primary_bone, self.secondary_bone)
+        count = self._do_split(obj, arm_obj, self.source_vg, self.primary_bone,
+                               self.secondary_bone, self.blend_width)
         if count < 0:
             self.report({'ERROR'}, "Bones are co-located — cannot determine a split axis")
             return {'CANCELLED'}
@@ -467,9 +595,29 @@ class WPAT_OT_split_coaxial_weights(bpy.types.Operator):
             mir_secondary = bpy.utils.flip_name(self.secondary_bone)
 
             if mir_source != self.source_vg:
-                mir_count = self._do_split(obj, arm_obj, mir_source, mir_primary, mir_secondary)
+                mir_count = self._do_split(obj, arm_obj, mir_source, mir_primary,
+                                           mir_secondary, self.blend_width)
                 if mir_count >= 0:
                     msg += f"; mirror: moved {mir_count} to '{mir_secondary}'"
+
+        # Post-split boundary smooth (Laplacian) — only if requested
+        if self.smooth_iterations > 0 and self.secondary_bone in obj.vertex_groups:
+            primary_vg   = obj.vertex_groups[self.source_vg]
+            secondary_vg = obj.vertex_groups[self.secondary_bone]
+            self._smooth_boundaries(obj, primary_vg, secondary_vg, self.smooth_iterations)
+
+            if mesh.use_mirror_vertex_groups and mirror_axes_active:
+                mir_source    = bpy.utils.flip_name(self.source_vg)
+                mir_secondary = bpy.utils.flip_name(self.secondary_bone)
+                if (mir_source != self.source_vg
+                        and mir_source    in obj.vertex_groups
+                        and mir_secondary in obj.vertex_groups):
+                    self._smooth_boundaries(
+                        obj,
+                        obj.vertex_groups[mir_source],
+                        obj.vertex_groups[mir_secondary],
+                        self.smooth_iterations,
+                    )
 
         self.report({'INFO'}, msg)
         return {'FINISHED'}
