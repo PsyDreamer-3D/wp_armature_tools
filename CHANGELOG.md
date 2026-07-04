@@ -6,6 +6,7 @@ All notable changes to Weight Paint Armature Tools are documented here.
 
 ### Added
 - **Split Coaxial Weights** operator (Weight Utilities section): splits a single vertex group across N co-axial bones by projecting each vertex onto the combined bone axis. The bone chain is auto-detected from the active vertex group name (`.001`, `.002`, … suffix convention) and displayed per-bone in the dialog with validity indicators. Bones can be entered manually as a comma-separated list to support non-standard naming. Respects the active Weight Paint mirror settings — when Mirror Vertex Groups is enabled, the full mirrored chain is split automatically.
+- **Blend Width** and **Smooth Iterations** options on Split Coaxial Weights: Blend Width feathers each internal split boundary with a smoothstep transition instead of a hard cut, splitting a vertex's weight between the two adjacent bones; Smooth Iterations runs an edge-topology-aware Laplacian smooth (matching Blender's own vertex group smooth) across every boundary in the chain afterward.
 - Release workflow and build scripts for automated packaging.
 
 ### Changed
