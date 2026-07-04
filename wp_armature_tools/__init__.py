@@ -333,6 +333,23 @@ Auto-detects the bone chain from the active vertex group name (.001, .002, … s
         description="Comma-separated bone names in axis order (auto-detected from Source VG name)",
     )
 
+    blend_width: bpy.props.FloatProperty(
+        name="Blend Width",
+        description=(
+            "Width of the soft transition zone at the split point, as a fraction of the "
+            "combined bone axis length. 0 = hard cut."
+        ),
+        min=0.0, max=0.5, default=0.05, subtype='FACTOR',
+    )
+    smooth_iterations: bpy.props.IntProperty(
+        name="Smooth Iterations",
+        description=(
+            "Edge-topology-aware smoothing passes applied to the split boundary. "
+            "0 = off. Uses the same uniform Laplacian as Blender's Weight Paint smooth."
+        ),
+        min=0, max=10, default=0,
+    )
+
     @classmethod
     def poll(cls, context):
         obj = context.active_object
@@ -386,6 +403,10 @@ Auto-detects the bone chain from the active vertex group name (.001, .002, … s
                 else:
                     row.label(text=f"{name}  (not found)", icon='ERROR')
 
+        layout.separator(factor=0.5)
+        layout.prop(self, "blend_width")
+        layout.prop(self, "smooth_iterations")
+
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -393,7 +414,7 @@ Auto-detects the bone chain from the active vertex group name (.001, .002, … s
         """Return the list of stripped, non-empty bone name strings."""
         return [n.strip() for n in bone_chain_str.split(",") if n.strip()]
 
-    def _do_split_chain(self, obj, arm_obj, source_vg_name, bone_names):
+    def _do_split_chain(self, obj, arm_obj, source_vg_name, bone_names, blend_width=0.0):
         """Distribute source_vg_name's weights across N bones along their shared axis.
 
         Bones are sorted by their head position along the axis so the caller
@@ -403,8 +424,17 @@ Auto-detects the bone chain from the active vertex group name (.001, .002, … s
         and assigns the weight to that bone's vertex group.  The source group
         is cleared of any vertex that was redistributed.
 
-        Returns a dict  {bone_name: vertex_count}  on success, or None when
-        prerequisites are missing (silent — used for the mirrored pass).
+        blend_width controls the half-width of a smoothstep transition zone at each
+        internal split threshold (as a fraction of the total axis length), splitting
+        a vertex's weight smoothly between the two bones on either side. 0 = hard cut.
+        Assumes each segment is wider than blend_width; thinner segments may not blend
+        against both neighbours correctly.
+
+        Returns (counts, sorted_bone_names) on success — counts is a dict
+        {bone_name: vertex_count} and sorted_bone_names is bone_names reordered along
+        the axis (needed by the caller to smooth adjacent boundaries in order).
+        Returns None when prerequisites are missing (silent — used for the mirrored
+        pass).
         """
         arm = arm_obj.data
 
@@ -460,8 +490,9 @@ Auto-detects the bone chain from the active vertex group name (.001, .002, … s
         mesh_to_arm = arm_obj.matrix_world.inverted() @ obj.matrix_world
         vg_idx = source_vg.index
 
-        # Classify every vertex that belongs to the source group.
-        assignments = [[] for _ in bones_sorted]   # assignments[i] = [(vert_idx, weight), …]
+        # Classify every vertex that belongs to the source group into a hard
+        # segment bucket, keeping its axis position (t) for the blend pass below.
+        classified = []   # [(vert_idx, weight, seg, t), ...]
 
         for vert in obj.data.vertices:
             w = None
@@ -482,21 +513,136 @@ Auto-detects the bone chain from the active vertex group name (.001, .002, … s
                     seg = i
                     break
 
-            assignments[seg].append((vert.index, w))
+            classified.append((vert.index, w, seg, t))
+
+        # Distribute weights per segment, splitting across an internal threshold's
+        # smoothstep blend zone when the vertex falls within half_w of it.
+        half_w = blend_width / 2.0
+        vg_weights = [{} for _ in bones_sorted]   # vg_weights[seg][vert_idx] = weight
+
+        for idx, w, seg, t in classified:
+            blended = False
+            if half_w > 0.0:
+                # Right boundary of this segment (toward seg + 1).
+                if seg < len(split_ts):
+                    delta = t - split_ts[seg]              # <= 0 within this bucket
+                    if delta > -half_w:
+                        zone_t = (delta + half_w) / (2.0 * half_w)
+                        blend  = zone_t * zone_t * (3.0 - 2.0 * zone_t)
+                        vg_weights[seg][idx]     = vg_weights[seg].get(idx, 0.0)     + w * (1.0 - blend)
+                        vg_weights[seg + 1][idx] = vg_weights[seg + 1].get(idx, 0.0) + w * blend
+                        blended = True
+                # Left boundary of this segment (toward seg - 1).
+                if not blended and seg > 0:
+                    delta = t - split_ts[seg - 1]          # > 0 within this bucket
+                    if delta < half_w:
+                        zone_t = (delta + half_w) / (2.0 * half_w)
+                        blend  = zone_t * zone_t * (3.0 - 2.0 * zone_t)
+                        vg_weights[seg][idx]     = vg_weights[seg].get(idx, 0.0)     + w * blend
+                        vg_weights[seg - 1][idx] = vg_weights[seg - 1].get(idx, 0.0) + w * (1.0 - blend)
+                        blended = True
+            if not blended:
+                vg_weights[seg][idx] = vg_weights[seg].get(idx, 0.0) + w
 
         # Flush all classified vertices from the source group first, then
         # write them into the correct destination groups.
-        all_indices = [idx for seg in assignments for (idx, _) in seg]
+        all_indices = [idx for idx, _, _, _ in classified]
         if all_indices:
             source_vg.remove(all_indices)
 
         counts = {}
-        for bone, vg, seg in zip(bones_sorted, dest_vgs, assignments):
-            for idx, w in seg:
-                vg.add([idx], w, 'REPLACE')
-            counts[bone.name] = len(seg)
+        for bone, vg, weights in zip(bones_sorted, dest_vgs, vg_weights):
+            n = 0
+            for idx, w in weights.items():
+                if w >= 1e-6:
+                    vg.add([idx], w, 'REPLACE')
+                    n += 1
+            counts[bone.name] = n
 
-        return counts
+        return counts, [b.name for b in bones_sorted]
+
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _smooth_boundaries(obj, vg_a, vg_b, iterations, factor=0.5):
+        """Uniform graph Laplacian smooth over the boundary vertices of vg_a and vg_b.
+
+        Only vertices that have non-zero weight in BOTH groups are smoothed (the blend
+        zone at the split boundary). Each iteration blends each boundary vertex toward
+        its edge-neighbour average, then renormalises a+b to preserve the combined
+        total weight — no weight is created or destroyed.
+
+        Uses the same algorithm as Blender's vertex_group_smooth operator
+        (vgroup_smooth_subset in object_vgroup.cc): uniform graph Laplacian with
+        adjacency built from mesh.edges.
+        """
+        if iterations < 1:
+            return
+
+        mesh = obj.data
+        idx_a = vg_a.index
+        idx_b = vg_b.index
+
+        # Build edge adjacency map  {vert_index: [neighbour_indices, ...]}
+        adj = {}
+        for edge in mesh.edges:
+            v0, v1 = edge.vertices[0], edge.vertices[1]
+            adj.setdefault(v0, []).append(v1)
+            adj.setdefault(v1, []).append(v0)
+
+        ifac = 1.0 - factor
+
+        for _ in range(iterations):
+            # Snapshot current weights for both groups
+            wa = {}
+            wb = {}
+            for vert in mesh.vertices:
+                for g in vert.groups:
+                    if g.group == idx_a:
+                        wa[vert.index] = g.weight
+                    elif g.group == idx_b:
+                        wb[vert.index] = g.weight
+
+            # Only smooth vertices present in BOTH groups (the boundary zone)
+            boundary = set(wa) & set(wb)
+            if not boundary:
+                break
+
+            new_wa = dict(wa)
+            new_wb = dict(wb)
+
+            for vi in boundary:
+                neighbours = adj.get(vi, [])
+                if not neighbours:
+                    continue
+                n = len(neighbours)
+                avg_a = sum(wa.get(nb, 0.0) for nb in neighbours) / n
+                avg_b = sum(wb.get(nb, 0.0) for nb in neighbours) / n
+
+                new_wa[vi] = ifac * wa[vi] + factor * avg_a
+                new_wb[vi] = ifac * wb[vi] + factor * avg_b
+
+                # Renormalise to preserve combined total (a + b = constant)
+                total_before = wa[vi]     + wb[vi]
+                total_after  = new_wa[vi] + new_wb[vi]
+                if total_after > 1e-6:
+                    scale = total_before / total_after
+                    new_wa[vi] *= scale
+                    new_wb[vi] *= scale
+
+            # Write back, pruning near-zero entries
+            for vi in boundary:
+                w = new_wa[vi]
+                if w < 1e-6:
+                    vg_a.remove([vi])
+                else:
+                    vg_a.add([vi], w, 'REPLACE')
+
+                w = new_wb[vi]
+                if w < 1e-6:
+                    vg_b.remove([vi])
+                else:
+                    vg_b.add([vi], w, 'REPLACE')
 
     # ------------------------------------------------------------------
 
@@ -524,24 +670,43 @@ Auto-detects the bone chain from the active vertex group name (.001, .002, … s
             self.report({'ERROR'}, "Bone chain contains duplicate names")
             return {'CANCELLED'}
 
-        counts = self._do_split_chain(obj, arm_obj, self.source_vg, bone_names)
-        if counts is None:
+        result = self._do_split_chain(obj, arm_obj, self.source_vg, bone_names, self.blend_width)
+        if result is None:
             self.report({'ERROR'}, "Bones are co-located — cannot determine a split axis")
             return {'CANCELLED'}
+        counts, sorted_names = result
 
         summary = ", ".join(f"{n}: {c}v" for n, c in counts.items())
         msg = f"Split '{self.source_vg}' → {summary}"
 
         mesh = obj.data
         mirror_axes_active = obj.use_mesh_mirror_x or obj.use_mesh_mirror_y or obj.use_mesh_mirror_z
+        mir_sorted_names = None
         if mesh.use_mirror_vertex_groups and mirror_axes_active:
             mir_source = bpy.utils.flip_name(self.source_vg)
             if mir_source != self.source_vg:
                 mir_bones  = [bpy.utils.flip_name(n) for n in bone_names]
-                mir_counts = self._do_split_chain(obj, arm_obj, mir_source, mir_bones)
-                if mir_counts is not None:
+                mir_result = self._do_split_chain(obj, arm_obj, mir_source, mir_bones, self.blend_width)
+                if mir_result is not None:
+                    mir_counts, mir_sorted_names = mir_result
                     mir_summary = ", ".join(f"{n}: {c}v" for n, c in mir_counts.items())
                     msg += f" | mirror → {mir_summary}"
+
+        # Post-split boundary smooth (Laplacian) — only if requested. Smooths every
+        # adjacent pair of bones along the chain, one boundary at a time.
+        if self.smooth_iterations > 0:
+            for a, b in zip(sorted_names, sorted_names[1:]):
+                if a in obj.vertex_groups and b in obj.vertex_groups:
+                    self._smooth_boundaries(
+                        obj, obj.vertex_groups[a], obj.vertex_groups[b], self.smooth_iterations
+                    )
+
+            if mir_sorted_names is not None:
+                for a, b in zip(mir_sorted_names, mir_sorted_names[1:]):
+                    if a in obj.vertex_groups and b in obj.vertex_groups:
+                        self._smooth_boundaries(
+                            obj, obj.vertex_groups[a], obj.vertex_groups[b], self.smooth_iterations
+                        )
 
         self.report({'INFO'}, msg)
         return {'FINISHED'}
