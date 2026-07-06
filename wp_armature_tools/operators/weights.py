@@ -5,6 +5,35 @@ import bpy
 from ..core.utils import get_armature_object
 
 
+class WPAT_OT_assign_automatic_from_bones(bpy.types.Operator):
+    """Set the weights of the groups matching the attached armatures selected bones, using the distance between the vertices and the bones"""
+    bl_idname = "wpat.assign_automatic_from_bones"
+    bl_label = "Assign Automatic Weights"
+    bl_options = {'REGISTER', 'UNDO'}
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return obj and obj.type == 'MESH' and len(obj.vertex_groups) > 0
+
+    def execute(self, context):
+        return bpy.ops.paint.weight_from_bones(type='AUTOMATIC')
+
+
+class WPAT_OT_assign_automatic_from_envelopes(bpy.types.Operator):
+    """Set weights from envelopes with user defined radius."""
+    bl_idname = "wpat.assign_automatic_from_envelopes"
+    bl_label = "Assign Weights from Bone Envelopes"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return obj and obj.type == 'MESH' and len(obj.vertex_groups) > 0
+
+    def execute(self, context):
+        return bpy.ops.paint.weight_from_bones(type='ENVELOPES')
+
+
 class WPAT_OT_normalize_all_weights(bpy.types.Operator):
     """Normalize all vertex groups on the active mesh so they sum to 1"""
     bl_idname = "wpat.normalize_all_weights"
