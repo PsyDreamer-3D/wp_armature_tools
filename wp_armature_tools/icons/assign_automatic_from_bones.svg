@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Generator: Blender, SVG Export for Grease Pencil - v2.1 -->
+
+<svg
+   version="1.1"
+   x="0px"
+   y="0px"
+   width="419.451904px"
+   height="419.451660px"
+   viewBox="0 0 419.451904 419.451660"
+   id="svg6"
+   sodipodi:docname="assign_automatic_from_bones.svg"
+   inkscape:version="1.4.3 (0d15f75042, 2025-12-25)"
+   inkscape:export-filename="assign_automatic_from_bones.png"
+   inkscape:export-xdpi="7.3238435"
+   inkscape:export-ydpi="7.3238435"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs6" />
+  <sodipodi:namedview
+     id="namedview6"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="true"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="1.8571866"
+     inkscape:cx="209.72583"
+     inkscape:cy="209.72583"
+     inkscape:window-width="2560"
+     inkscape:window-height="1007"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg6" />
+  <path
+     d="M397.89355,119.85339L390.75146,77.8479L379.61475,76.42749L367.90112,71.35315L356.83423,62.617554L348.0984,51.55066L343.02417,39.837036L341.60376,28.700317L299.5984,21.558228L56.81848,354.99255L59.38623,356.60193L61.28247,358.16913L62.849854,360.0655L64.45923,362.63324z"
+     fill-rule="evenodd"
+     fill="#FEFEFE"
+     stroke="none"
+     fill-opacity="0.5"
+     id="path4" />
+  <path
+     d="M362.78857,22.253052L360.4961,26.542114L359.08423,31.195923L358.60767,36.035767L359.08423,40.875732L360.4961,45.52954L362.78857,49.818604L365.87378,53.578003L369.63306,56.663208L373.92236,58.95581L378.57617,60.367554L383.41602,60.84424L388.25586,60.367554L392.90967,58.95581L397.19897,56.663208L400.95825,53.578003L404.04346,49.818604L406.33594,45.52954L407.74756,40.87561L408.22437,36.03589L407.74756,31.195923L406.33594,26.542114L404.04346,22.253052L400.95825,18.493652L397.19897,15.408325L392.90967,13.115845L388.25586,11.704102L383.41602,11.227417L378.57617,11.704102L373.92236,13.115845L369.63306,15.408325L365.87378,18.493652z"
+     fill-rule="evenodd"
+     fill="#FEFEFE"
+     stroke="none"
+     fill-opacity="0.5"
+     id="path5" />
+  <path
+     d="M15.45459,369.20593L13.136719,373.54248L11.709351,378.24786L11.227417,383.14136L11.709351,388.0348L13.136719,392.74017L15.45459,397.0766L18.574097,400.87762L22.375,403.997L26.711304,406.31494L31.41687,407.7423L36.310425,408.22424L41.203857,407.7423L45.909058,406.31494L50.245728,403.997L54.04651,400.87762L57.166016,397.07666L59.483887,392.7401L60.9115,388.03473L61.39319,383.14136L60.9115,378.24786L59.483887,373.54248L57.166016,369.20593L54.04651,365.4049L50.245728,362.28552L45.909058,359.96765L41.203857,358.54022L36.310425,358.0583L31.41687,358.54028L26.711548,359.96765L22.375,362.28552L18.574097,365.40497z"
+     fill-rule="evenodd"
+     fill="#FEFEFE"
+     stroke="none"
+     fill-opacity="0.5"
+     id="path6" />
+</svg>

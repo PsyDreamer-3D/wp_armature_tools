@@ -22,7 +22,7 @@ class WPAT_OT_assign_automatic_from_bones(bpy.types.Operator):
 class WPAT_OT_assign_automatic_from_envelopes(bpy.types.Operator):
     """Set weights from envelopes with user defined radius."""
     bl_idname = "wpat.assign_automatic_from_envelopes"
-    bl_label = "Assign Weights from Bone Envelopes"
+    bl_label = "Assign Envelope Weights"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod

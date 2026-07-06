@@ -62,6 +62,22 @@ class WPAT_PT_armature_panel(bpy.types.Panel):
                 clear.operator("wpat.clear_solo", text="", icon='X')
             layout.separator()
 
+        # ── Pose options ──────────────────────────────────────────────────
+        col = layout.column(align=True)
+        col.label(text="Pose Options:")
+        col.prop(arm_obj.pose, "use_auto_ik", text="Auto IK")
+        col.prop(arm_obj.pose, "use_mirror_x", text="X-Axis Mirror")
+        sub = col.column()
+        sub.active = arm_obj.pose.use_mirror_x and not arm_obj.pose.use_auto_ik
+        sub.prop(arm_obj.pose, "use_mirror_relative", text="Relative Mirror")
+
+        layout.separator()
+        col = layout.column(align=True)
+        col.label(text="Affect Only:")
+        col.prop(context.tool_settings, "use_transform_pivot_point_align", text="Locations")
+
+        layout.separator()
+
         # ── Pose utilities ────────────────────────────────────────────────
         col = layout.column(align=True)
         col.label(text="Pose Utilities:")
@@ -75,7 +91,7 @@ class WPAT_PT_armature_panel(bpy.types.Panel):
         # ── Weight utilities ──────────────────────────────────────────────
         col = layout.column(align=True)
         col.label(text="Weight Utilities:")
-        col.operator("wpat.assign_automatic_from_bones", icon='ARMATURE_DATA')
+        col.operator("wpat.assign_automatic_from_bones", icon_value=get_icon("assign_automatic_from_bones"))
         col.operator("wpat.assign_automatic_from_envelopes", icon_value=get_icon("assign_automatic_from_envelopes"))
         col.operator("wpat.normalize_all_weights",  icon='MOD_VERTEX_WEIGHT')
         col.operator("wpat.split_coaxial_weights",  icon='BONE_DATA')
