@@ -2,6 +2,7 @@
 
 import bpy
 
+from ..core.icons import get_icon
 from ..core.utils import _any_solo_active, _USE_BONE_COLLECTIONS, get_armature_object, is_cloudrig
 
 
@@ -74,6 +75,8 @@ class WPAT_PT_armature_panel(bpy.types.Panel):
         # ── Weight utilities ──────────────────────────────────────────────
         col = layout.column(align=True)
         col.label(text="Weight Utilities:")
+        col.operator("wpat.assign_automatic_from_bones", icon='ARMATURE_DATA')
+        col.operator("wpat.assign_automatic_from_envelopes", icon_value=get_icon("assign_automatic_from_envelopes"))
         col.operator("wpat.normalize_all_weights",  icon='MOD_VERTEX_WEIGHT')
         col.operator("wpat.split_coaxial_weights",  icon='BONE_DATA')
 

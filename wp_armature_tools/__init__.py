@@ -25,7 +25,7 @@ _needs_reload = "bpy" in locals()
 
 import bpy
 
-from . import properties, operators, ui
+from . import core, properties, operators, ui
 
 # START — workflow remove
 if _needs_reload:
@@ -42,6 +42,7 @@ del _needs_reload
 
 
 def register():
+    core.register()
     properties.register()
     operators.register()
     ui.register()
@@ -51,6 +52,7 @@ def unregister():
     ui.unregister()
     operators.unregister()
     properties.unregister()
+    core.unregister()
 
 
 if __name__ == "__main__":
