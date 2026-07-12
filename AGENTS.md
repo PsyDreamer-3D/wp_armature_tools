@@ -81,6 +81,13 @@ subpackage's internal class-registration order.
   changing either the blend or smoothing logic, since both assume segments are
   wider than `blend_width`.
 
+## Building & Releasing
+
+Follows the workspace-wide convention in `../AGENTS.md` ("Versioning &
+Release") — nothing project-specific here. Cut a release with
+`scripts/prepare_release.sh <version>` on `main`; for a local sanity-check
+build without tagging anything, use `scripts/build_dev.sh`.
+
 ## Testing
 
 No automated test suite — Blender's `bpy` API isn't meaningfully mockable for

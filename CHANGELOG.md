@@ -20,6 +20,7 @@ All notable changes to Weight Paint Armature Tools are documented here.
 - Repo structure updated to match project conventions.
 - Split the single `__init__.py` into `core/`, `operators/`, `properties/`, and `ui/` subpackages, each owning its own class registration; `__init__.py` is now orchestration-only (hot-reload guard + register/unregister). Added `AGENTS.md` documenting the layout and project-specific design decisions.
 - `scripts/bump_version.py`, `scripts/build_dev.sh`, and `scripts/generate_index.py` now auto-detect the add-on package directory instead of hardcoding `wp_armature_tools`, matching the project-agnostic convention used elsewhere in the workspace. `.github/workflows/release.yml` updated to match (pinned Blender version moved to a single `env.BLENDER_VERSION`).
+- Added `scripts/prepare_release.sh` and `scripts/update_changelog.py`, plus `.github/workflows/auto-tag-release.yml`: pushing a `Release vX.Y.Z` commit to `main` now dates the CHANGELOG's `Unreleased` section, bumps the manifest version, and auto-tags/publishes via the existing `release.yml` pipeline, instead of requiring a manually pushed tag.
 
 ---
 
