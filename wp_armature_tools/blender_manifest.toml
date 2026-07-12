@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "wp_armature_tools"
-version = "1.7.0"
+version = "1.8.0"
 name = "Weight Paint Armature Tools"
 tagline = "Armature operators and bone layer controls in Weight Paint mode"
 maintainer = "Jess G."

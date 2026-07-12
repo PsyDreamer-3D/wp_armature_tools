@@ -7,7 +7,7 @@
 bl_info = {
     "name": "Weight Paint Armature Tools",
     "author": "Jess G.",
-    "version": (1, 7, 0),
+    "version": (1, 8, 0),
     "blender": (3, 0, 0),
     "location": "Weight Paint > Sidebar > Armature  |  M → Bone Layers popup",
     "description": (
