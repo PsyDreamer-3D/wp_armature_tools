@@ -4,7 +4,6 @@ from .bone_layers import WPAT_OT_clear_solo, WPAT_OT_bone_layers_popup
 from .pose import (
     WPAT_OT_toggle_pose_position,
     WPAT_OT_clear_bone_transforms,
-    WPAT_OT_apply_pose_as_rest,
 )
 from .weights import WPAT_OT_normalize_all_weights, WPAT_OT_split_coaxial_weights, WPAT_OT_assign_automatic_from_bones, WPAT_OT_assign_automatic_from_envelopes
 
@@ -13,7 +12,6 @@ classes = (
     WPAT_OT_bone_layers_popup,
     WPAT_OT_toggle_pose_position,
     WPAT_OT_clear_bone_transforms,
-    WPAT_OT_apply_pose_as_rest,
     WPAT_OT_assign_automatic_from_bones,
     WPAT_OT_assign_automatic_from_envelopes,
     WPAT_OT_normalize_all_weights,

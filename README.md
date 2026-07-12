@@ -16,7 +16,7 @@ Located in the **N-panel → Armature** tab while in Weight Paint mode.
 | **Armature** | Displays the name of the linked armature. Shows a *CloudRig* badge when a CloudRig-managed rig is detected. |
 | **Pose Position** | `POSE` / `REST` enum buttons and a quick-toggle operator, wired directly to `armature.data.pose_position`. |
 | **Bone Layers / Collections** | Opens the bone layer popup. Shows a *Clear Solo* button when a solo is active. Hidden for CloudRig rigs. |
-| **Pose Utilities** | **Clear Bone Transforms** — clears location, rotation, and scale on the selected bones (`pose.transforms_clear`). **Apply Pose as Rest Pose** — applies the current pose as the new rest pose. Both are disabled when the armature is in Rest Position. |
+| **Pose** | **Auto IK**, **X-Axis Mirror**, **Relative Mirror**, and **Affect Only Locations** toggles — the same controls Blender exposes only in Pose Mode's header, wired directly to `pose.use_auto_ik` / `pose.use_mirror_x` / `pose.use_mirror_relative` and `tool_settings.use_transform_pivot_point_align`. **Clear Bone Transforms** — clears location, rotation, and scale on the selected bones (`pose.transforms_clear`), disabled when the armature is in Rest Position. |
 | **Weight Utilities** | **Normalize All Weights** — normalizes all vertex groups so weights sum to 1. |
 
 ### Bone Layer / Collection Popup
