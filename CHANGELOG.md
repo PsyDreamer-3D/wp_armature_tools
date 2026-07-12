@@ -4,6 +4,8 @@ All notable changes to Weight Paint Armature Tools are documented here.
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-07-12
+
 ### Added
 - **Assign Automatic Weights** and **Assign Envelope Weights** operators (Weight Utilities section): one-click wrappers around Blender's `paint.weight_from_bones` for the active mesh's linked armature, using its selected bones — automatic (distance-based) or bone-envelope weighting — without leaving Weight Paint mode. Each has a custom icon.
 - **Pose Options** section in the Armature sidebar panel: Auto IK, X-Axis Mirror, and Relative Mirror toggles, plus an **Affect Only → Locations** toggle, wired directly to Blender's own `pose.use_auto_ik` / `pose.use_mirror_x` / `pose.use_mirror_relative` and `tool_settings.use_transform_pivot_point_align`. Normally these are only reachable from the header while in Pose Mode — surfacing them here lets you pre-configure pose-transform behavior before switching out of Weight Paint mode to test deformation.

@@ -2,7 +2,11 @@ name: Build & Publish Extension
 
 # Standard release pipeline for this workspace's Blender add-ons.
 # Push a semver tag (vX.Y.Z) to build the extension zip and publish a
-# GitHub Release with it attached.
+# GitHub Release with it attached. Also runnable as a reusable workflow
+# (see the `workflow_call` trigger below) — auto-tag-release.yml invokes it
+# directly after creating a tag from a "Release vX.Y.Z" commit on main.
+# Release notes are pulled from the matching dated section of CHANGELOG.md
+# (see scripts/update_changelog.py and ../../AGENTS.md section 5).
 #
 # Assumes one add-on per repo, with the package directory named the same
 # as the repo itself (see ../../AGENTS.md, section 2). scripts/*.py locate
@@ -14,11 +18,22 @@ on:
   push:
     tags:
       - '*'
+  workflow_call:
+    # Lets .github/workflows/auto-tag-release.yml invoke this workflow
+    # directly after it creates a tag, instead of relying on that tag push
+    # to trigger the `push: tags:` event above — pushes made with the
+    # default GITHUB_TOKEN don't cascade into other workflow runs, so a
+    # relied-upon retrigger would silently never fire.
+    inputs:
+      tag:
+        required: true
+        type: string
 
 env:
   # Bump this when a newer stable Blender release is available:
   # https://download.blender.org/release/
   BLENDER_VERSION: "5.1.1"
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   build:
@@ -27,6 +42,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Install Blender
         run: |
@@ -42,7 +59,7 @@ jobs:
 
       - name: Bump version
         run: |
-          python3 scripts/bump_version.py "${GITHUB_REF_NAME}"
+          python3 scripts/bump_version.py "${RELEASE_TAG}"
 
       - name: Strip development-only code blocks
         run: |
@@ -55,16 +72,20 @@ jobs:
             --source-dir "${{ github.event.repository.name }}" \
             --output-dir dist
 
+      - name: Extract release notes
+        run: |
+          python3 scripts/update_changelog.py extract "${RELEASE_TAG#v}" > release-notes.md
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ github.ref_name }}
-          generate_release_notes: true
+          tag_name: ${{ env.RELEASE_TAG }}
+          body_path: release-notes.md
           draft: false
           prerelease: false
 
       - name: Upload extension zip to release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
           files: dist/*.zip
