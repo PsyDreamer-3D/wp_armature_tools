@@ -13,7 +13,7 @@ license = ["SPDX:GPL-2.0-or-later"]
 
 category = "Rigging"
 
-tags = ["Rigging", "Paint", "Armature", "Weight Paint"]
+tags = ["Rigging", "Paint"]
 
 [permissions]
 # No network, file-system, or clipboard access required.
