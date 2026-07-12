@@ -1,0 +1,84 @@
+name: Auto-tag Release Commit
+
+# Detects a "Release vX.Y.Z" commit pushed to main (see
+# scripts/prepare_release.sh) and creates + pushes the matching tag, then
+# runs the same build/publish pipeline a manually pushed tag would trigger
+# — via release.yml's `workflow_call` trigger, invoked directly from this
+# run rather than by relying on the tag push above to fire release.yml's
+# own `push: tags:` trigger. That reliance would silently never work:
+# pushes made with the default GITHUB_TOKEN do not trigger other workflow
+# runs (GitHub's loop-prevention behavior).
+#
+# Before tagging, cross-checks that blender_manifest.toml's version and
+# CHANGELOG.md's dated section both already match the version named in the
+# commit message. Pure commit-message sniffing would otherwise let any
+# unrelated commit that happens to start with "Release v" (a revert, a
+# typo, a docs change) create a real tag and GitHub Release.
+#
+# Manual releases (`git tag vX.Y.Z && git push origin vX.Y.Z`) are
+# unaffected and keep working via release.yml's own trigger.
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: auto-tag-release-${{ github.ref }}
+  cancel-in-progress: false # never cancel a release build mid-flight
+
+jobs:
+  check-and-tag:
+    if: startsWith(github.event.head_commit.message, 'Release v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.parse.outputs.tag }}
+      should_release: ${{ steps.parse.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # need full tag history — a shallow clone can miss existing tags
+
+      - id: parse
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          should_release=false
+
+          if [[ "$COMMIT_MESSAGE" =~ ^Release\ v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            version="${BASH_REMATCH[1]}"
+            tag="v${version}"
+            manifest_path="$(find . -maxdepth 2 -name blender_manifest.toml -print -quit)"
+            manifest_version="$(grep -m1 -oP '(?<=^version = ")[^"]+' "$manifest_path" || true)"
+
+            if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+              echo "::warning::Tag $tag already exists — skipping."
+            elif [[ "$manifest_version" != "$version" ]]; then
+              echo "::warning::Commit message says v$version but blender_manifest.toml has '$manifest_version' — refusing to tag."
+            elif ! grep -qF "## [$version]" CHANGELOG.md; then
+              echo "::warning::No dated '## [$version]' section in CHANGELOG.md — refusing to tag."
+            else
+              echo "tag=$tag" >> "$GITHUB_OUTPUT"
+              should_release=true
+            fi
+          fi
+
+          echo "should_release=$should_release" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        if: steps.parse.outputs.should_release == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.parse.outputs.tag }}" -m "${{ steps.parse.outputs.tag }}"
+          git push origin "${{ steps.parse.outputs.tag }}"
+
+  release:
+    needs: check-and-tag
+    if: needs.check-and-tag.outputs.should_release == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.check-and-tag.outputs.tag }}
