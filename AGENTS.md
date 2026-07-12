@@ -27,7 +27,7 @@ wp_armature_tools/
 ├── core/utils.py         # get_armature_object, is_cloudrig, tag_redraw_all, _any_solo_active
 ├── operators/
 │   ├── bone_layers.py    # WPAT_OT_clear_solo, WPAT_OT_bone_layers_popup
-│   ├── pose.py           # toggle/apply/clear pose operators
+│   ├── pose.py           # toggle/clear pose operators
 │   └── weights.py        # normalize + split-coaxial-weights operators
 ├── properties/preferences.py  # WPATPreferences (keymap UI)
 └── ui/panel.py            # WPAT_PT_armature_panel
@@ -64,14 +64,14 @@ subpackage's internal class-registration order.
   `poll()` lets the addon's item run first, and fall through to CloudRig's own
   handler when `poll()` returns `False` on a CloudRig rig.
 - **Deliberate `bpy.ops` exceptions** in `operators/pose.py` and
-  `operators/weights.py` (`object.mode_set`, `pose.armature_apply`,
-  `pose.transforms_clear`, `object.vertex_group_normalize_all`): these are
+  `operators/weights.py` (`object.mode_set`, `pose.transforms_clear`,
+  `object.vertex_group_normalize_all`): these are
   used inside `execute()`, which the workspace rule generally forbids. Kept
   as-is because `object.mode_set` has no data-API equivalent at all (`Object.mode`
-  is read-only outside operators), and reimplementing pose-apply / transform-clear
-  via `bmesh` would mean re-deriving Blender's own pose-to-rest bone math — a
-  large, risky rewrite of stable, already-shipped behavior that nobody asked
-  for. Each call site sets `view_layer.objects.active` immediately before the
+  is read-only outside operators), and reimplementing transform-clear via `bmesh`
+  would mean re-deriving Blender's own pose-transform math — a large, risky
+  rewrite of stable, already-shipped behavior that nobody asked for. Each call
+  site sets `view_layer.objects.active` immediately before the
   matching `mode_set`, so context is never ambiguous at the call site.
 - **Split Coaxial Weights** (`operators/weights.py`) generalizes a hard 2-bone
   cut into an N-bone chain: each internal boundary gets its own smoothstep
@@ -95,8 +95,8 @@ this add-on's geometry-heavy operators. Manual regression checklist:
    on Blender <4.0, named collections with solo toggles on 4.0+). Confirm it
    does *not* open on a CloudRig-managed rig (CloudRig's own popup should fire
    instead, or nothing if CloudRig isn't installed).
-4. Toggle Pose/Rest position, run Clear Bone Transforms and Apply Pose as Rest
-   Pose in Pose position; confirm both re-enter Weight Paint mode afterward.
+4. Toggle Pose/Rest position, run Clear Bone Transforms in Pose position;
+   confirm it re-enters Weight Paint mode afterward.
 5. Run Normalize All Weights on a mesh with multiple vertex groups.
 6. Run Split Coaxial Weights on a 2+ bone chain (e.g. `thigh`, `thigh.001`):
    verify with `blend_width = 0` it's a hard cut, with `blend_width > 0` the

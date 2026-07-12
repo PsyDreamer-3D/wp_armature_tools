@@ -19,6 +19,8 @@ Located in the **N-panel → Armature** tab while in Weight Paint mode.
 | **Pose Options** | **Auto IK**, **X-Axis Mirror**, and **Relative Mirror** toggles, plus **Affect Only → Locations** — the same controls Blender exposes only in Pose Mode's header, wired directly to `pose.use_auto_ik` / `pose.use_mirror_x` / `pose.use_mirror_relative` and `tool_settings.use_transform_pivot_point_align`. Pre-configure them without leaving Weight Paint mode. |
 | **Pose Utilities** | **Clear Bone Transforms** — clears location, rotation, and scale on the selected bones (`pose.transforms_clear`). **Apply Pose as Rest Pose** — applies the current pose as the new rest pose. Both are disabled when the armature is in Rest Position. |
 | **Weight Utilities** | **Assign Automatic Weights** and **Assign Envelope Weights** — assign weights from the linked armature's selected bones (distance-based or bone-envelope), wrapping `paint.weight_from_bones`. **Normalize All Weights** — normalizes all vertex groups so weights sum to 1. **Split Coaxial Weights** — splits a vertex group across a chain of co-axial bones, with optional blend width and boundary smoothing. |
+| **Pose** | **Auto IK**, **X-Axis Mirror**, **Relative Mirror**, and **Affect Only Locations** toggles — the same controls Blender exposes only in Pose Mode's header, wired directly to `pose.use_auto_ik` / `pose.use_mirror_x` / `pose.use_mirror_relative` and `tool_settings.use_transform_pivot_point_align`. **Clear Bone Transforms** — clears location, rotation, and scale on the selected bones (`pose.transforms_clear`), disabled when the armature is in Rest Position. |
+| **Weight Utilities** | **Normalize All Weights** — normalizes all vertex groups so weights sum to 1. |
 
 ### Bone Layer / Collection Popup
 
