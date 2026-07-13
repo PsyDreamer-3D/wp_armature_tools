@@ -6,6 +6,10 @@ import bpy
 # BoneCollection has native is_visible and is_solo properties.
 _USE_BONE_COLLECTIONS = bpy.app.version >= (4, 0, 0)
 
+# Blender 4.1 added real parent/child bone collection hierarchy (.parent,
+# .children, .is_expanded). On exactly 4.0.x, collections exist but are flat.
+_USE_BONE_COLLECTION_HIERARCHY = bpy.app.version >= (4, 1, 0)
+
 
 def get_armature_object(context):
     """Return the first armature object linked to the active mesh via an

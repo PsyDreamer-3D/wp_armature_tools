@@ -7,6 +7,9 @@ All notable changes to Weight Paint Armature Tools are documented here.
 ### Added
 - **Select Bone Chain** / **Extend Bone Chain** operators (new "Bone Chain" panel in the Pose Mode and Edit Armature Mode sidebar, plus a Bone Selection section in the Weight Paint Armature panel): selects the connected bone chain through the active bone by walking `use_connect` parent/child links, stopping at branches (multiple connected children) or disconnected joins. Works identically across Edit Armature, Pose, and Weight Paint (bone-select) modes. **Extend Bone Chain** adds the chain to the current selection instead of replacing it.
 
+### Changed
+- **Bone Layers popup** (M key / sidebar button, Blender 4.0+): the flat, unbounded list of bone collections is now a proper scrollable `UIList`, and on Blender 4.1+ (where bone collection parent/child hierarchy exists) it renders as a collapsible tree with per-branch expand/collapse arrows, matching how nested collections are actually organized instead of dumping every collection — nested or not — into one long column. Falls back to a flat but still scrollable list on exactly Blender 4.0.x, where hierarchy isn't available.
+
 ## [1.8.0] — 2026-07-12
 
 ### Added
