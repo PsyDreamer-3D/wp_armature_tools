@@ -1,9 +1,11 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-from .panel import WPAT_PT_armature_panel
+from .panel import WPAT_PT_armature_panel, WPAT_PT_bone_chain_pose, WPAT_PT_bone_chain_edit
 
 classes = (
     WPAT_PT_armature_panel,
+    WPAT_PT_bone_chain_pose,
+    WPAT_PT_bone_chain_edit,
 )
 
 
