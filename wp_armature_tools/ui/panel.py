@@ -6,6 +6,13 @@ from ..core.icons import get_icon
 from ..core.utils import _any_solo_active, _USE_BONE_COLLECTIONS, get_armature_object, is_cloudrig
 
 
+def _draw_bone_chain_buttons(layout):
+    col = layout.column(align=True)
+    col.operator("wpat.select_bone_chain", text="Select Bone Chain", icon='GROUP_BONE').extend = False
+    col.operator("wpat.select_bone_chain", text="Extend Bone Chain", icon='SELECT_EXTEND').extend = True
+    return col
+
+
 class WPAT_PT_armature_panel(bpy.types.Panel):
     bl_label = "Armature"
     bl_idname = "WPAT_PT_armature_panel"
@@ -62,6 +69,11 @@ class WPAT_PT_armature_panel(bpy.types.Panel):
                 clear.operator("wpat.clear_solo", text="", icon='X')
             layout.separator()
 
+        # ── Bone Selection ─────────────────────────────────────────────────
+        layout.label(text="Bone Selection:")
+        _draw_bone_chain_buttons(layout)
+        layout.separator()
+
         # ── Pose ─────────────────────────────────────────────────────────
         col = layout.column(align=True)
         col.label(text="Pose:")
@@ -110,3 +122,27 @@ class WPAT_PT_armature_panel(bpy.types.Panel):
 
         if _USE_BONE_COLLECTIONS:
             col.row(align=True).prop(arm, "relation_line_position", text="Relations", expand=True)
+
+
+class _WPAT_PT_bone_chain_base:
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Armature"
+    bl_label = "Bone Chain"
+
+    @classmethod
+    def poll(cls, context):
+        return context.active_object is not None and context.active_object.type == 'ARMATURE'
+
+    def draw(self, context):
+        _draw_bone_chain_buttons(self.layout)
+
+
+class WPAT_PT_bone_chain_pose(_WPAT_PT_bone_chain_base, bpy.types.Panel):
+    bl_idname = "WPAT_PT_bone_chain_pose"
+    bl_context = "posemode"
+
+
+class WPAT_PT_bone_chain_edit(_WPAT_PT_bone_chain_base, bpy.types.Panel):
+    bl_idname = "WPAT_PT_bone_chain_edit"
+    bl_context = "armature_edit"

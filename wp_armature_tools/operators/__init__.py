@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+from .bone_chain import WPAT_OT_select_bone_chain
 from .bone_layers import WPAT_OT_clear_solo, WPAT_OT_bone_layers_popup
 from .pose import (
     WPAT_OT_toggle_pose_position,
@@ -8,6 +9,7 @@ from .pose import (
 from .weights import WPAT_OT_normalize_all_weights, WPAT_OT_split_coaxial_weights, WPAT_OT_assign_automatic_from_bones, WPAT_OT_assign_automatic_from_envelopes
 
 classes = (
+    WPAT_OT_select_bone_chain,
     WPAT_OT_clear_solo,
     WPAT_OT_bone_layers_popup,
     WPAT_OT_toggle_pose_position,

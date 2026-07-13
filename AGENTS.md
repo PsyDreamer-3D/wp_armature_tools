@@ -110,3 +110,10 @@ this add-on's geometry-heavy operators. Manual regression checklist:
    boundary blends smoothly, and `smooth_iterations > 0` further softens it
    without changing total per-vertex weight. Repeat with Mirror Vertex Groups
    enabled on a mirrored mesh and confirm the mirrored chain splits too.
+7. In Edit Armature mode, select a bone with a connected chain (some
+   `use_connect` children/parent) and a branch point; run **Select Bone
+   Chain** from the new "Bone Chain" sidebar panel and confirm it selects the
+   full connected run and stops at the branch. Repeat in Pose mode and in
+   Weight Paint bone-select mode. Then select a bone outside the chain and
+   confirm **Extend Bone Chain** adds the chain to the existing selection
+   instead of replacing it.
