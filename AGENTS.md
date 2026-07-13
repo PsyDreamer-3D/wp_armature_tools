@@ -101,7 +101,15 @@ this add-on's geometry-heavy operators. Manual regression checklist:
 3. Press **M** — the Bone Layers/Collections popup should open (32-layer grid
    on Blender <4.0, named collections with solo toggles on 4.0+). Confirm it
    does *not* open on a CloudRig-managed rig (CloudRig's own popup should fire
-   instead, or nothing if CloudRig isn't installed).
+   instead, or nothing if CloudRig isn't installed). On Blender 4.1+, on an
+   armature with nested bone collections, confirm children are indented under
+   their parent, the expand arrow collapses/expands that branch, and
+   `is_visible`/`is_solo` toggles still work per row. On an armature with many
+   flat (sibling-only) collections, confirm the list has a fixed height with a
+   scrollbar instead of an unbounded wall of rows, and that the funnel/search
+   icon keeps a matched child's ancestor chain visible instead of filtering it
+   out. On Blender 4.0.x, confirm the same popup still works as a flat,
+   non-indented, scrollable list with no errors.
 4. Toggle Pose/Rest position, run Clear Bone Transforms in Pose position;
    confirm it re-enters Weight Paint mode afterward.
 5. Run Normalize All Weights on a mesh with multiple vertex groups.
