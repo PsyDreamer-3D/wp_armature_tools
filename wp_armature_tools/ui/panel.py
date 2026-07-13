@@ -6,6 +6,13 @@ from ..core.icons import get_icon
 from ..core.utils import _any_solo_active, _USE_BONE_COLLECTIONS, get_armature_object, is_cloudrig
 
 
+def _draw_bone_chain_buttons(layout):
+    col = layout.column(align=True)
+    col.operator("wpat.select_bone_chain", text="Select Bone Chain", icon='GROUP_BONE').extend = False
+    col.operator("wpat.select_bone_chain", text="Extend Bone Chain", icon='SELECT_EXTEND').extend = True
+    return col
+
+
 class WPAT_PT_armature_panel(bpy.types.Panel):
     bl_label = "Armature"
     bl_idname = "WPAT_PT_armature_panel"
@@ -63,9 +70,8 @@ class WPAT_PT_armature_panel(bpy.types.Panel):
             layout.separator()
 
         # ── Bone Selection ─────────────────────────────────────────────────
-        col = layout.column(align=True)
-        col.label(text="Bone Selection:")
-        col.operator("wpat.select_bone_chain", icon='GROUP_BONE')
+        layout.label(text="Bone Selection:")
+        _draw_bone_chain_buttons(layout)
         layout.separator()
 
         # ── Pose ─────────────────────────────────────────────────────────
@@ -129,7 +135,7 @@ class _WPAT_PT_bone_chain_base:
         return context.active_object is not None and context.active_object.type == 'ARMATURE'
 
     def draw(self, context):
-        self.layout.operator("wpat.select_bone_chain", icon='GROUP_BONE')
+        _draw_bone_chain_buttons(self.layout)
 
 
 class WPAT_PT_bone_chain_pose(_WPAT_PT_bone_chain_base, bpy.types.Panel):

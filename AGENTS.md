@@ -114,4 +114,6 @@ this add-on's geometry-heavy operators. Manual regression checklist:
    `use_connect` children/parent) and a branch point; run **Select Bone
    Chain** from the new "Bone Chain" sidebar panel and confirm it selects the
    full connected run and stops at the branch. Repeat in Pose mode and in
-   Weight Paint bone-select mode (with Extend on and off).
+   Weight Paint bone-select mode. Then select a bone outside the chain and
+   confirm **Extend Bone Chain** adds the chain to the existing selection
+   instead of replacing it.

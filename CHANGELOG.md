@@ -5,7 +5,7 @@ All notable changes to Weight Paint Armature Tools are documented here.
 ## [Unreleased]
 
 ### Added
-- **Select Bone Chain** operator (new "Bone Chain" panel in the Pose Mode and Edit Armature Mode sidebar, plus a Bone Selection button in the Weight Paint Armature panel): selects the connected bone chain through the active bone by walking `use_connect` parent/child links, stopping at branches (multiple connected children) or disconnected joins. Works identically across Edit Armature, Pose, and Weight Paint (bone-select) modes since `Bone` and `EditBone` share the same parent/children/use_connect interface. Enable **Extend** (via the operator redo panel) to add the chain to the current selection instead of replacing it.
+- **Select Bone Chain** / **Extend Bone Chain** operators (new "Bone Chain" panel in the Pose Mode and Edit Armature Mode sidebar, plus a Bone Selection section in the Weight Paint Armature panel): selects the connected bone chain through the active bone by walking `use_connect` parent/child links, stopping at branches (multiple connected children) or disconnected joins. Works identically across Edit Armature, Pose, and Weight Paint (bone-select) modes. **Extend Bone Chain** adds the chain to the current selection instead of replacing it.
 
 ## [1.8.0] — 2026-07-12
 
