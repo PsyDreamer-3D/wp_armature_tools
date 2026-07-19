@@ -13,7 +13,7 @@ class WPAT_OT_assign_automatic_from_bones(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         obj = context.active_object
-        return obj and obj.type == 'MESH' and len(obj.vertex_groups) > 0
+        return obj and obj.type == 'MESH' and get_armature_object(context) is not None
 
     def execute(self, context):
         return bpy.ops.paint.weight_from_bones(type='AUTOMATIC')
@@ -28,7 +28,7 @@ class WPAT_OT_assign_automatic_from_envelopes(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         obj = context.active_object
-        return obj and obj.type == 'MESH' and len(obj.vertex_groups) > 0
+        return obj and obj.type == 'MESH' and get_armature_object(context) is not None
 
     def execute(self, context):
         return bpy.ops.paint.weight_from_bones(type='ENVELOPES')
