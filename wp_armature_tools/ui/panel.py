@@ -3,7 +3,7 @@
 import bpy
 
 from ..core.icons import get_icon
-from ..core.utils import _any_solo_active, _USE_BONE_COLLECTIONS, get_armature_object, is_cloudrig
+from ..core.utils import _any_solo_active, _USE_BONE_COLLECTIONS, _USE_GEOMETRY_NODES, get_armature_object, is_cloudrig
 
 
 def _draw_bone_chain_buttons(layout):
@@ -97,6 +97,10 @@ class WPAT_PT_armature_panel(bpy.types.Panel):
         col.operator("wpat.assign_automatic_from_envelopes", icon_value=get_icon("assign_automatic_from_envelopes"))
         col.operator("wpat.normalize_all_weights",  icon='MOD_VERTEX_WEIGHT')
         col.operator("wpat.split_coaxial_weights",  icon='BONE_DATA')
+        col.operator("wpat.combine_vertex_groups", icon='MOD_VERTEX_WEIGHT')
+        if _USE_GEOMETRY_NODES:
+            col.operator("wpat.combine_vertex_groups_geonodes",
+                          text="Combine (Geometry Nodes)", icon='GEOMETRY_NODES')
 
         layout.separator()
 

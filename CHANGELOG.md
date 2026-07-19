@@ -4,6 +4,10 @@ All notable changes to Weight Paint Armature Tools are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Combine Vertex Groups** operator (Weight Utilities section): sums or averages two existing vertex groups' normalized weights into a new (or existing, fully overwritten) target group without touching either source group. Sum is clamped to 1.0; Average is a fixed 50/50 blend so already-normalized inputs never exceed 1.0. Respects Mirror Vertex Groups: if the target name has a distinct `.L`/`.R` mirror, the mirrored source pair is combined into the mirrored target automatically.
+- **Combine Vertex Groups (Geometry Nodes)** operator (Blender 4.0+): non-destructive equivalent that adds a Geometry Nodes modifier (auto-created "Combine Vertex Groups" node group) positioned above the Armature modifier so the combined weights actually influence deformation. Creates the target vertex group empty first — Blender only recognizes a Store Named Attribute write as vertex-group data if that name already exists in the object's vertex group list.
+
 ## [1.9.0] — 2026-07-12
 
 ### Added

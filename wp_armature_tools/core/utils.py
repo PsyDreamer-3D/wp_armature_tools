@@ -10,6 +10,12 @@ _USE_BONE_COLLECTIONS = bpy.app.version >= (4, 0, 0)
 # .children, .is_expanded). On exactly 4.0.x, collections exist but are flat.
 _USE_BONE_COLLECTION_HIERARCHY = bpy.app.version >= (4, 1, 0)
 
+# Blender 4.0 replaced the legacy inputs.new()/outputs.new() node-group
+# socket API with node_tree.interface, and is where the Fields-based
+# GeometryNodeInputNamedAttribute/GeometryNodeStoreNamedAttribute nodes this
+# add-on's Combine Vertex Groups (Geometry Nodes) feature needs are stable.
+_USE_GEOMETRY_NODES = bpy.app.version >= (4, 0, 0)
+
 
 def get_armature_object(context):
     """Return the first armature object linked to the active mesh via an

@@ -2,6 +2,7 @@
 
 from .bone_chain import WPAT_OT_select_bone_chain
 from .bone_layers import WPAT_OT_clear_solo, WPAT_UL_bone_collections, WPAT_OT_bone_layers_popup
+from .combine_weights import WPAT_OT_combine_vertex_groups, WPAT_OT_combine_vertex_groups_geonodes
 from .pose import (
     WPAT_OT_toggle_pose_position,
     WPAT_OT_clear_bone_transforms,
@@ -19,6 +20,8 @@ classes = (
     WPAT_OT_assign_automatic_from_envelopes,
     WPAT_OT_normalize_all_weights,
     WPAT_OT_split_coaxial_weights,
+    WPAT_OT_combine_vertex_groups,
+    WPAT_OT_combine_vertex_groups_geonodes,
 )
 
 # Accumulated keymap entries for clean unregister.

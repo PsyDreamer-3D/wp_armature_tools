@@ -24,9 +24,13 @@ Split into the standard four-subpackage layout:
 wp_armature_tools/
 ├── __init__.py          # orchestration only — hot-reload guard, register/unregister
 ├── blender_manifest.toml
-├── core/utils.py         # get_armature_object, is_cloudrig, tag_redraw_all, _any_solo_active
+├── core/
+│   ├── utils.py          # get_armature_object, is_cloudrig, tag_redraw_all, _any_solo_active
+│   └── geonodes.py        # ensure_combine_vertex_groups_node_group() — procedural GN node groups
 ├── operators/
+│   ├── bone_chain.py     # Select/Extend Bone Chain
 │   ├── bone_layers.py    # WPAT_OT_clear_solo, WPAT_OT_bone_layers_popup
+│   ├── combine_weights.py # Combine Vertex Groups (destructive + Geometry Nodes variant)
 │   ├── pose.py           # toggle/clear pose operators
 │   └── weights.py        # normalize + split-coaxial-weights operators
 ├── properties/preferences.py  # WPATPreferences (keymap UI)
@@ -80,6 +84,24 @@ subpackage's internal class-registration order.
   chain. See the class docstrings for the exact math — worth reading before
   changing either the blend or smoothing logic, since both assume segments are
   wider than `blend_width`.
+- **Combine Vertex Groups (Geometry Nodes variant)**: `GeometryNodeStoreNamedAttribute`
+  cannot create a new vertex group by name — Blender's attribute layer for
+  vertex groups only writes if the name already exists in `obj.vertex_groups`.
+  The GN operator therefore always pre-creates the (empty) target vertex group
+  via the data API before adding the modifier. The modifier is also moved
+  (via `obj.modifiers.move()`, a data-API method — no `bpy.ops` exception
+  needed here) to sit immediately above the first Armature modifier found:
+  because modifiers evaluate top-to-bottom, an Armature modifier below a
+  stale (un-combined) target group would deform using zero weight there,
+  silently discarding the combine's effect. The Geometry Nodes result is
+  **not** visible in Weight Paint mode's paint/weight overlay — that always
+  reflects `obj.data`'s base-mesh weights, never modifier-evaluated data — so
+  verify the GN variant via deformed shape (toggle Pose Position), not the
+  paint overlay. `core/geonodes.py`'s node group is gated behind
+  `core.utils._USE_GEOMETRY_NODES` (Blender 4.0+, where the modern
+  `node_tree.interface` socket API and the Fields-based Named Attribute nodes
+  it needs are stable) — this is a separate concern from
+  `_USE_BONE_COLLECTIONS`, even though both thresholds happen to be 4.0.
 
 ## Building & Releasing
 
@@ -125,3 +147,17 @@ this add-on's geometry-heavy operators. Manual regression checklist:
    Weight Paint bone-select mode. Then select a bone outside the chain and
    confirm **Extend Bone Chain** adds the chain to the existing selection
    instead of replacing it.
+8. Run **Combine Vertex Groups** with two overlapping normalized groups: Sum
+   should clamp at vertices where both groups have weight (no vertex exceeds
+   1.0 total), Average should read as a smooth 50/50 blend with no seam at
+   the boundary of either source group. Re-run into an existing target and
+   confirm it's fully overwritten, not additively merged. Repeat with Mirror
+   Vertex Groups enabled and a `.L`/`.R`-suffixed target, confirming the
+   mirrored pair combines into the mirrored target; confirm a non-suffixed
+   target name skips the mirrored pass instead of double-writing. Then run
+   **Combine Vertex Groups (Geometry Nodes)**: confirm the modifier appears
+   positioned above the Armature modifier, confirm the target vertex group is
+   created (empty) in the Vertex Groups list, and confirm the deformed mesh
+   in Pose Position visibly reflects the combined weights even though Weight
+   Paint's paint overlay still shows the target group as empty (expected —
+   see the design notes above).
