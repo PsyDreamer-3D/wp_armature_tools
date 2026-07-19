@@ -4,6 +4,8 @@ All notable changes to Weight Paint Armature Tools are documented here.
 
 ## [Unreleased]
 
+## [1.9.1] — 2026-07-19
+
 ### Fixed
 - **Assign Automatic Weights** and **Assign Envelope Weights** no longer require the mesh to already have vertex groups before they can be used. Their `poll()` incorrectly gated on `len(vertex_groups) > 0`, which made both operators impossible to use on a fresh mesh with an Armature modifier but no groups yet — exactly the case they're meant to bootstrap. Now checks for a linked Armature modifier instead, matching Blender's own `paint.weight_from_bones` poll.
 
