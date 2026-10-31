@@ -4,6 +4,10 @@ All notable changes to Weight Paint Armature Tools are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Releases include an `index.json`, so the add-on can be added in Blender as a remote repository (`https://github.com/PsyDreamer-3D/wp_armature_tools/releases/latest/download/index.json`) and Blender offers updates. Replaces `scripts/generate_index.py`, whose index Blender refused to sync (no `schema_version` or `archive_size`); the release workflow now uses Blender's own `extension server-generate`.
+
 ## [1.9.1] — 2026-07-19
 
 ### Fixed

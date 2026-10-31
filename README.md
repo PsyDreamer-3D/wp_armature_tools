@@ -83,6 +83,8 @@ zip method described below.
 
 ## Installation
 
+To get updates inside Blender, add `https://github.com/PsyDreamer-3D/wp_armature_tools/releases/latest/download/index.json` as a remote repository (**Preferences → Get Extensions → Repositories → + → Add Remote Repository**) and turn on **Check for Updates on Startup**. Releases carry the `index.json` that URL points at, so each new version shows up as an update.
+
 ### Blender 4.2+ (Extensions)
 
 1. Download `wp_armature_tools.py` and `blender_manifest.toml` and place
