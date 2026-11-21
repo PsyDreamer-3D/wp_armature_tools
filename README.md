@@ -83,7 +83,16 @@ zip method described below.
 
 ## Installation
 
-### Blender 4.2+ (Extensions)
+### Blender 4.2+ with updates (recommended)
+
+1. **Edit → Preferences → Get Extensions → Repositories → + → Add Remote Repository**.
+2. URL: `https://psydreamer-3d.github.io/extensions/index.json`
+3. Turn on **Check for Updates on Startup** if you want Blender to check automatically.
+4. Install "Weight Paint Armature Tools" from the Get Extensions list.
+
+That's the [PsyDreamer-3D extensions repository](https://github.com/PsyDreamer-3D/extensions): it lists the other PsyDreamer-3D add-ons too, and each new release shows up there as an update.
+
+### Blender 4.2+ (Extensions, by hand)
 
 1. Download `wp_armature_tools.py` and `blender_manifest.toml` and place
    them in a folder named `wp_armature_tools`.
