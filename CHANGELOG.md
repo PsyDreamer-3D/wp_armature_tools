@@ -4,6 +4,9 @@ All notable changes to Weight Paint Armature Tools are documented here.
 
 ## [Unreleased]
 
+### Added
+- Listed in the [PsyDreamer-3D extensions repository](https://github.com/PsyDreamer-3D/extensions): add `https://psydreamer-3d.github.io/extensions/index.json` as a remote repository in Blender 4.2+ and Blender offers each new release as an update. Releases are published there as soon as they're out.
+
 ## [1.9.1] — 2026-07-19
 
 ### Fixed
